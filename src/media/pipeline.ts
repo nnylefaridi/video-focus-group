@@ -141,6 +141,18 @@ export async function transcribe(dir: string): Promise<TranscriptSegment[]> {
   return segments;
 }
 
+/** WebVTT captions from the word-timed transcript, so the player's CC button shows real captions. */
+export function writeCaptions(dir: string, transcript: TranscriptSegment[]) {
+  const ts = (t: number) => {
+    const h = Math.floor(t / 3600);
+    const m = Math.floor((t % 3600) / 60);
+    const s = t % 60;
+    return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${s.toFixed(3).padStart(6, "0")}`;
+  };
+  const cues = transcript.map((s, i) => `${i + 1}\n${ts(s.start)} --> ${ts(Math.max(s.end, s.start + 0.5))}\n${s.text}`);
+  fs.writeFileSync(path.join(dir, "captions.vtt"), `WEBVTT\n\n${cues.join("\n\n")}\n`);
+}
+
 export async function audioSignals(dir: string, duration: number, transcript: TranscriptSegment[]) {
   const wav = path.join(dir, "audio.wav");
   const seconds = Math.ceil(duration);

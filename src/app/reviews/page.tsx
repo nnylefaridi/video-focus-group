@@ -23,7 +23,7 @@ async function List() {
     <ul className="mt-8 space-y-3">
       {reviews.map((r) => (
         <li key={r.id}>
-          <Link href={`/r/${r.id}`} className="flex items-center gap-4 rounded-2xl border border-line bg-card p-4 transition-shadow hover:shadow-soft">
+          <Link href={`/r/${r.id}`} className="flex items-center gap-4 cutout p-4 transition-shadow hover:shadow-soft">
             <div className="flex -space-x-2">
               {r.board.map((b) => {
                 const p = getProfile(b);
@@ -52,7 +52,7 @@ export default function ReviewsPage() {
   return (
     <main className="mx-auto w-full max-w-2xl px-4 py-12 sm:py-16">
       <div className="flex items-center justify-between">
-        <h1 className="font-serif text-[2rem] text-ink">Your reviews</h1>
+        <h1 className="font-display font-extrabold text-[2rem] text-ink">Your reviews</h1>
         <Link href="/" className="rounded-full bg-accent px-5 py-2 text-sm text-accent-ink transition-all hover:brightness-110">
           New review
         </Link>

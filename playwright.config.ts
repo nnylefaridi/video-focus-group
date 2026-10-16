@@ -1,4 +1,8 @@
+import fs from "node:fs";
 import { defineConfig, devices } from "@playwright/test";
+
+// Tests branch on whether the app has an API key, so read the same env file the app does.
+if (fs.existsSync(".env.local")) process.loadEnvFile(".env.local");
 
 /** Browser tests run against the dev app on port 3000 (started automatically if it isn't running). */
 export default defineConfig({

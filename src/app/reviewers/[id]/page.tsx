@@ -30,7 +30,7 @@ async function Profile({ params }: { params: PageProps<"/reviewers/[id]">["param
       <div className="mt-8 flex items-center gap-5">
         <Avatar card={toCard(p)} size={84} />
         <div>
-          <h1 className="font-serif text-[2rem] leading-tight text-ink">{p.name}</h1>
+          <h1 className="font-display font-extrabold text-[2rem] leading-tight text-ink">{p.name}</h1>
           <p className="text-ink-soft">{p.field}</p>
         </div>
       </div>
@@ -42,7 +42,7 @@ async function Profile({ params }: { params: PageProps<"/reviewers/[id]">["param
       </p>
 
       <section className="mt-12">
-        <h2 className="font-serif text-2xl text-ink">The questions they ask first</h2>
+        <h2 className="font-display font-extrabold text-2xl text-ink">The questions they ask first</h2>
         <ol className="mt-4 list-decimal space-y-2 pl-5 text-ink">
           {p.reasoningPattern.map((q, i) => (
             <li key={i}>{q}</li>
@@ -51,10 +51,10 @@ async function Profile({ params }: { params: PageProps<"/reviewers/[id]">["param
       </section>
 
       <section className="mt-12">
-        <h2 className="font-serif text-2xl text-ink">Documented ideas they review with</h2>
+        <h2 className="font-display font-extrabold text-2xl text-ink">Documented ideas they review with</h2>
         <ul className="mt-4 space-y-3">
           {principles.map((pr) => (
-            <li key={pr.id} className="rounded-2xl border border-line bg-card p-4">
+            <li key={pr.id} className="cutout p-4">
               <p className="text-ink">{pr.statement}</p>
               <p className="mt-2 text-sm text-ink-soft">
                 {CONFIDENCE[pr.confidence]} ·{" "}
@@ -82,7 +82,7 @@ async function Profile({ params }: { params: PageProps<"/reviewers/[id]">["param
 
       {p.frameworks.length > 0 && (
         <section className="mt-12">
-          <h2 className="font-serif text-2xl text-ink">Frameworks</h2>
+          <h2 className="font-display font-extrabold text-2xl text-ink">Frameworks</h2>
           <ul className="mt-4 space-y-4">
             {p.frameworks.map((f) => (
               <li key={f.id}>
@@ -97,7 +97,7 @@ async function Profile({ params }: { params: PageProps<"/reviewers/[id]">["param
 
       {p.limitations.length > 0 && (
         <section className="mt-12">
-          <h2 className="font-serif text-2xl text-ink">Outside their lane</h2>
+          <h2 className="font-display font-extrabold text-2xl text-ink">Outside their lane</h2>
           <ul className="mt-4 list-disc space-y-1.5 pl-5 text-ink-soft">
             {p.limitations.map((l, i) => (
               <li key={i}>{l}</li>
@@ -107,7 +107,7 @@ async function Profile({ params }: { params: PageProps<"/reviewers/[id]">["param
       )}
 
       <section className="mt-12">
-        <h2 className="font-serif text-2xl text-ink">Sources</h2>
+        <h2 className="font-display font-extrabold text-2xl text-ink">Sources</h2>
         <ul className="mt-4 space-y-2">
           {p.sources.map((s) => (
             <li key={s.id} className="text-ink-soft">

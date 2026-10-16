@@ -27,6 +27,7 @@ export type ReviewView = {
     | {
         url: string | null;
         poster: string | null;
+        captions: string | null;
         originalName: string;
         bytes: number;
         durationSec: number;

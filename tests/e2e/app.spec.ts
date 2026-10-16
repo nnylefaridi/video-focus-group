@@ -75,3 +75,24 @@ test("APIs refuse bad input and unsigned media", async ({ request }) => {
   const create = await request.post("/api/reviews", { data: { answers: [], board: ["mrbeast"] } });
   expect(create.status()).toBe(hasKey ? 400 : 503);
 });
+
+test("a finished review opens as a paper puppet boardroom", async ({ page, request }) => {
+  const { reviews } = await (await request.get("/api/reviews")).json();
+  const done = (reviews as { id: string; stage: string; board: string[] }[]).find((r) => r.stage === "done");
+  test.skip(!done, "No finished review in this install yet");
+  await page.goto(`/r/${done!.id}`);
+  // One puppet per board member, each a separate cutout on a stick, plus a flat video player.
+  await expect(page.locator(`button[aria-label^="Ask "]`).first()).toBeVisible();
+  await expect(page.locator("button[aria-label^='Ask ']")).toHaveCount(done!.board.length);
+  const video = page.locator("video");
+  await expect(video).toBeVisible();
+  const transform = await video.evaluate((v) => getComputedStyle(v.parentElement!.parentElement!).transform);
+  expect(transform === "none" || transform === "matrix(1, 0, 0, 1, 0, 0)").toBe(true);
+  await expect(page.getByRole("button", { name: /discussion/i }).first()).toBeVisible();
+  // Every section opens.
+  for (const name of ["Video Analysis", "Discussion", "Revision Plan", "The Board"]) {
+    await page.getByRole("button", { name, exact: true }).first().click();
+  }
+  await page.getByRole("button", { name: "Revision Plan", exact: true }).first().click();
+  await expect(page.getByRole("heading", { name: "Revision plan" })).toBeVisible();
+});

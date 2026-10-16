@@ -8,6 +8,7 @@ import type { ExpertCard } from "@/core/expert";
 import { QUESTION_BY_ID } from "@/core/questionnaire/graph";
 import { resolve, inferredQuestions, type Answer } from "@/core/questionnaire/engine";
 import { Avatar } from "../Avatar";
+import { Boardroom } from "../board/Boardroom";
 import { Close, Pencil, Plus } from "../Icons";
 
 type Props = {
@@ -32,8 +33,8 @@ export function BoardStep({ answers, picks, roster, board, onChangeBoard, onEdit
 
   return (
     <div className="mx-auto w-full max-w-2xl">
-      <h1 className="font-serif text-[2rem] leading-tight text-ink sm:text-[2.5rem]">Here&apos;s who&apos;ll review it</h1>
-      <p className="mt-3 max-w-lg text-ink-soft">
+      <h1 className="font-display text-[2rem] leading-tight font-extrabold text-ink sm:text-[2.6rem]">Here&apos;s who&apos;ll review it</h1>
+      <p className="mt-3 max-w-lg font-semibold text-ink-soft">
         Picked for what you told us. Each one is an AI interpretation built from that person&apos;s published work, so they won&apos;t always agree.
       </p>
 
@@ -41,7 +42,13 @@ export function BoardStep({ answers, picks, roster, board, onChangeBoard, onEdit
         <p className="mt-8 rounded-2xl bg-warn-soft px-5 py-4 text-warn">No reviewers are available for this kind of video yet.</p>
       )}
 
-      <ul className="mt-8 space-y-3">
+      {chosen.length > 0 && (
+        <div className="-mx-4 mt-6 sm:-mx-10">
+          <Boardroom board={chosen} states={{}} />
+        </div>
+      )}
+
+      <ul className="mt-6 space-y-3">
         <AnimatePresence initial={false}>
           {chosen.map((c) => (
             <motion.li
@@ -50,17 +57,17 @@ export function BoardStep({ answers, picks, roster, board, onChangeBoard, onEdit
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, height: 0, marginTop: 0 }}
-              className="flex items-start gap-4 rounded-2xl border border-line bg-card p-4 shadow-soft sm:p-5"
+              className="cutout flex items-start gap-4 p-4 sm:p-5"
             >
               <Avatar card={c} size={60} />
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-baseline gap-x-2">
-                  <h2 className="font-serif text-xl text-ink">
+                  <h2 className="font-display font-extrabold text-xl text-ink">
                     <Link href={`/reviewers/${c.id}`} className="decoration-line-strong underline-offset-4 hover:underline">
                       {c.name}
                     </Link>
                   </h2>
-                  <span className="text-sm text-ink-soft">{c.field}</span>
+                  <span className="text-sm font-semibold text-ink-soft">{c.short}</span>
                 </div>
                 <p className="mt-1.5 text-[0.95rem] leading-relaxed text-ink">{c.lens}</p>
                 {(reasons.get(c.id)?.length ?? 0) > 0 && (
@@ -82,17 +89,15 @@ export function BoardStep({ answers, picks, roster, board, onChangeBoard, onEdit
 
       {others.length > 0 && board.length < MAX && (
         <div className="mt-8">
-          <h3 className="text-sm font-medium text-ink-soft">Add someone else</h3>
+          <h3 className="text-sm font-bold text-ink-soft">Add someone else</h3>
           <div className="mt-3 flex flex-wrap gap-2">
             {others.map((c) => (
               <button
                 key={c.id}
                 onClick={() => onChangeBoard([...board, c.id])}
-                className="inline-flex items-center gap-2 rounded-full border border-line bg-card py-1.5 pr-4 pl-1.5 text-sm text-ink transition-all hover:border-line-strong hover:shadow-soft"
+                className="cutout inline-flex items-center gap-2 rounded-full py-1 pr-4 pl-1 text-sm font-bold text-ink transition-all hover:-translate-y-0.5 hover:shadow-lift"
               >
-                <span className="grid h-7 w-7 place-items-center rounded-full text-xs font-medium" style={{ background: c.color }}>
-                  {c.initials}
-                </span>
+                <Avatar card={c} size={30} />
                 {c.name}
                 <Plus className="h-3.5 w-3.5 text-ink-soft" />
               </button>
@@ -101,7 +106,7 @@ export function BoardStep({ answers, picks, roster, board, onChangeBoard, onEdit
         </div>
       )}
 
-      <div className="mt-10 rounded-2xl border border-line">
+      <div className="cutout mt-10">
         <button
           onClick={() => setShowAnswers((s) => !s)}
           aria-expanded={showAnswers}
@@ -153,7 +158,7 @@ export function BoardStep({ answers, picks, roster, board, onChangeBoard, onEdit
       <button
         onClick={onContinue}
         disabled={chosen.length === 0}
-        className="mt-10 w-full rounded-full bg-accent px-6 py-3.5 text-base text-accent-ink transition-all hover:brightness-110 disabled:bg-paper-deep disabled:text-ink-faint sm:w-auto"
+        className="mt-10 w-full rounded-full bg-accent px-6 py-3.5 text-base font-bold text-accent-ink transition-all hover:brightness-110 disabled:bg-paper-deep disabled:text-ink-faint sm:w-auto"
       >
         Next: upload your video
       </button>

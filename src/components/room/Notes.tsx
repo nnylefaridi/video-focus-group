@@ -31,7 +31,7 @@ export function Notes() {
         <button
           onClick={() => setWho(null)}
           aria-pressed={who === null}
-          className={`rounded-full border px-3.5 py-1.5 text-sm transition-colors ${who === null ? "border-accent bg-accent-soft text-ink" : "border-line text-ink-soft hover:text-ink"}`}
+          className={`rounded-full border px-3.5 py-1.5 text-sm font-bold transition-colors ${who === null ? "border-accent bg-accent-soft text-ink" : "border-line bg-white text-ink-soft hover:text-ink"}`}
         >
           Everyone
         </button>
@@ -40,7 +40,7 @@ export function Notes() {
             key={c.id}
             onClick={() => setWho(c.id)}
             aria-pressed={who === c.id}
-            className={`rounded-full border px-3.5 py-1.5 text-sm transition-colors ${who === c.id ? "border-accent bg-accent-soft text-ink" : "border-line text-ink-soft hover:text-ink"}`}
+            className={`rounded-full border px-3.5 py-1.5 text-sm font-bold transition-colors ${who === c.id ? "border-accent bg-accent-soft text-ink" : "border-line bg-white text-ink-soft hover:text-ink"}`}
           >
             {c.name}
           </button>
@@ -48,10 +48,10 @@ export function Notes() {
       </div>
 
       {who && notes[who] && (
-        <div className="mt-6 rounded-2xl border border-line bg-card p-5">
+        <div className="mt-6 cutout p-5">
           <div className="flex items-center gap-3">
             <Avatar card={card(who)!} size={40} />
-            <p className="font-serif text-lg text-ink">{card(who)!.name}&apos;s take</p>
+            <p className="font-display font-extrabold text-lg text-ink">{card(who)!.name}&apos;s take</p>
             <Link href={`/reviewers/${who}`} className="ml-auto text-sm text-ink-soft underline decoration-line-strong underline-offset-4 hover:text-ink">
               Their published ideas
             </Link>
@@ -96,7 +96,7 @@ export function Notes() {
           const c = card(rid);
           if (!c) return null;
           return (
-            <li key={`${rid}-${o.id}`} className="rounded-2xl border border-line bg-card p-4 sm:p-5">
+            <li key={`${rid}-${o.id}`} className="cutout p-4 sm:p-5">
               <div className="flex flex-wrap items-center gap-2.5">
                 <span className="h-2.5 w-2.5 rounded-full" style={{ background: c.color }} aria-hidden />
                 <span className="text-sm font-medium text-ink">{c.name}</span>

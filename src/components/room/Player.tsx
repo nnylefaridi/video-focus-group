@@ -6,19 +6,35 @@ import { useRoom } from "./context";
 
 type Marker = { t: number; color: string; label: string; key: string };
 
-export function Player({ seekRequest, onTime }: { seekRequest: { t: number; n: number } | null; onTime: (t: number) => void }) {
+/**
+ * A flat, front-facing video player in a white paper frame. Never skewed or put
+ * in perspective. "stage" is the big boardroom player; "compact" adds the
+ * reviewer timeline markers for the analysis sections.
+ */
+export function Player({
+  variant,
+  seekRequest,
+  onTime,
+}: {
+  variant: "stage" | "compact";
+  seekRequest: { t: number; n: number } | null;
+  onTime: (t: number) => void;
+}) {
   const { view, seek, currentTime, card } = useRoom();
   const ref = useRef<HTMLVideoElement>(null);
+  const startAt = useRef(currentTime);
+  const v = view.video;
+  const aspect = v ? v.width / v.height : 16 / 9;
+  // Vertical videos get a shorter cap so the caption under the stage player stays in view.
+  const maxH = variant === "stage" ? (aspect < 1 ? "min(52vh, 88vw)" : "58vh") : "min(52vh, 88vw)";
 
   useEffect(() => {
-    const v = ref.current;
-    if (!v || !seekRequest) return;
-    v.currentTime = seekRequest.t;
-    v.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    const el = ref.current;
+    if (!el || !seekRequest) return;
+    el.currentTime = seekRequest.t;
   }, [seekRequest]);
-  const duration = view.video?.durationSec ?? 0;
-  const vertical = (view.video?.height ?? 16) > (view.video?.width ?? 9);
 
+  const duration = v?.durationSec ?? 0;
   const markers = useMemo<Marker[]>(() => {
     if (!view.ledger || !view.notes) return [];
     const l = view.ledger as unknown as Ledger;
@@ -31,30 +47,38 @@ export function Player({ seekRequest, onTime }: { seekRequest: { t: number; n: n
   }, [view.ledger, view.notes, card]);
 
   return (
-    <div>
-      <div className={`overflow-hidden rounded-2xl bg-ink ${vertical ? "mx-auto max-h-[36vh] w-fit lg:max-h-[68vh]" : ""}`}>
-        {view.video?.url ? (
+    <div className="mx-auto" style={{ width: `min(100%, calc(${maxH} * ${aspect}))` }}>
+      <div className="rounded-[1.1rem] bg-white p-[6px] shadow-lift ring-1 ring-black/5">
+        {v?.url ? (
           <video
             ref={ref}
-            src={view.video.url}
-            poster={view.video.poster ?? undefined}
+            src={v.url}
+            poster={v.poster ?? undefined}
             controls
             playsInline
             preload="metadata"
+            onLoadedMetadata={(e) => {
+              if (startAt.current > 0) e.currentTarget.currentTime = startAt.current;
+            }}
             onTimeUpdate={(e) => onTime(e.currentTarget.currentTime)}
-            className={`block ${vertical ? "max-h-[36vh] lg:max-h-[68vh]" : "w-full"}`}
-          />
+            className="block w-full rounded-[0.8rem] bg-ink"
+            style={{ aspectRatio: `${aspect}` }}
+          >
+            {v.captions && <track kind="captions" src={v.captions} srcLang="en" label="English" />}
+          </video>
         ) : (
-          <div className="grid aspect-[9/16] max-h-[36vh] place-items-center text-sm text-paper/70">Preparing video…</div>
+          <div className="grid w-full place-items-center rounded-[0.8rem] bg-paper-deep text-sm text-ink-soft" style={{ aspectRatio: `${aspect}` }}>
+            Preparing your video…
+          </div>
         )}
       </div>
 
-      {duration > 0 && (
-        <div className="mt-4">
+      {variant === "compact" && duration > 0 && (
+        <div className="mt-3">
           <div
             role="slider"
             tabIndex={0}
-            aria-label="Timeline"
+            aria-label="Moments the reviewers commented on"
             aria-valuemin={0}
             aria-valuemax={Math.round(duration)}
             aria-valuenow={Math.round(currentTime)}
@@ -67,13 +91,10 @@ export function Player({ seekRequest, onTime }: { seekRequest: { t: number; n: n
               const r = e.currentTarget.getBoundingClientRect();
               seek(((e.clientX - r.left) / r.width) * duration);
             }}
-            className="relative h-9 cursor-pointer"
+            className="relative h-8 cursor-pointer"
           >
             <div className="absolute inset-x-0 top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-paper-deep" />
             <div className="absolute top-1/2 left-0 h-1.5 -translate-y-1/2 rounded-full bg-line-strong" style={{ width: `${(currentTime / duration) * 100}%` }} />
-            {view.ledger?.shots.slice(1).map((s) => (
-              <div key={s.id} className="absolute top-1/2 h-3 w-px -translate-y-1/2 bg-line-strong" style={{ left: `${(s.start / duration) * 100}%` }} />
-            ))}
             {markers.map((m) => (
               <button
                 key={m.key}
@@ -83,13 +104,13 @@ export function Player({ seekRequest, onTime }: { seekRequest: { t: number; n: n
                   e.stopPropagation();
                   seek(m.t);
                 }}
-                className="absolute top-1/2 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-paper transition-transform hover:scale-125"
+                className="absolute top-1/2 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white transition-transform hover:scale-125"
                 style={{ left: `${(m.t / duration) * 100}%`, background: m.color }}
               />
             ))}
             <div className="absolute top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-full bg-ink" style={{ left: `${(currentTime / duration) * 100}%` }} />
           </div>
-          <div className="flex justify-between font-mono text-xs text-ink-soft tabular-nums">
+          <div className="flex justify-between text-xs font-semibold text-ink-soft tabular-nums">
             <span>{formatTime(currentTime)}</span>
             <span>{formatTime(duration)}</span>
           </div>

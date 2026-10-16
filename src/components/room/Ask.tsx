@@ -10,9 +10,9 @@ import { formatTime } from "@/core/evidence";
 type Msg = { role: "user" | "assistant"; text: string };
 
 /** Follow-up conversation with one reviewer. Answers stream in; the reviewer can take a closer look at a moment. */
-export function Ask() {
+export function Ask({ initialWho }: { initialWho?: string | null }) {
   const { view, card, currentTime, setSpeaking } = useRoom();
-  const [who, setWho] = useState(view.board[0]?.id ?? "");
+  const [who, setWho] = useState(initialWho ?? view.board[0]?.id ?? "");
   const [threads, setThreads] = useState<Record<string, Msg[]>>({});
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
@@ -30,7 +30,9 @@ export function Ask() {
       .catch(() => setThreads((t) => ({ ...t, [who]: [] })));
   }, [who, threads, view.id]);
 
-  useEffect(() => endRef.current?.scrollIntoView({ block: "nearest" }), [msgs.length, busy]);
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ block: "nearest" });
+  }, [msgs.length, busy]);
 
   async function send(text: string) {
     const message = text.trim();
@@ -95,7 +97,7 @@ export function Ask() {
             aria-checked={who === b.id}
             onClick={() => setWho(b.id)}
             disabled={busy}
-            className={`flex items-center gap-2 rounded-full border py-1 pr-4 pl-1 transition-colors ${who === b.id ? "border-accent bg-accent-soft" : "border-line hover:border-line-strong"}`}
+            className={`flex items-center gap-2 rounded-full border py-1 pr-4 pl-1 transition-colors ${who === b.id ? "border-accent bg-accent-soft" : "border-line bg-white hover:border-line-strong"}`}
           >
             <Avatar card={b} size={30} />
             <span className="text-sm text-ink">{b.name}</span>
@@ -118,7 +120,7 @@ export function Ask() {
             <div key={i} className="flex gap-3">
               <Avatar card={c} size={34} state={busy && i === msgs.length - 1 ? "speaking" : "idle"} />
               <div className="min-w-0 flex-1">
-                <div className="rounded-2xl rounded-tl-md px-4 py-3 leading-relaxed whitespace-pre-wrap text-ink" style={{ background: `${c.color}38` }}>
+                <div className="rounded-2xl rounded-tl-md px-4 py-2 leading-relaxed text-ink" style={{ background: `${c.color}38` }}>
                   {m.text ? <CitedText text={m.text} /> : <span className="text-ink-soft">Thinking…</span>}
                 </div>
                 {!busy && <PrincipleChips ids={principleIdsIn(m.text)} />}
@@ -144,11 +146,11 @@ export function Ask() {
         <button
           onClick={() => send(`What do you see happening around ${formatTime(currentTime)}? Take a close look.`)}
           disabled={busy}
-          className="mb-3 rounded-full border border-line px-3.5 py-1.5 text-sm text-ink-soft transition-colors hover:border-line-strong hover:text-ink disabled:opacity-50"
+          className="mb-3 rounded-full border border-line bg-white px-3.5 py-1.5 text-sm font-semibold text-ink-soft transition-colors hover:border-line-strong hover:text-ink disabled:opacity-50"
         >
           Ask about {formatTime(currentTime)}
         </button>
-        <div className="relative rounded-[1.3rem] border border-line bg-card shadow-soft focus-within:border-line-strong">
+        <div className="cutout-lift relative rounded-[1.3rem]">
           <label htmlFor="ask" className="sr-only">
             Ask {c.name}
           </label>

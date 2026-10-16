@@ -1,26 +1,32 @@
 @import "tailwindcss";
 
 /*
-  Design tokens: warm paper, soft ink, one restrained accent.
+  Paper world tokens: clean white notebook paper, slate ink, soft sage and blue.
   Visual bans are enforced by `npm run lint:design` (scripts/lint-design.mts).
 */
 :root {
   color-scheme: light;
-  --paper: #f6f1e7;
-  --paper-deep: #eee6d6;
-  --card: #fbf8f2;
-  --ink: #2b2722;
-  --ink-soft: #5b544a;
-  --ink-faint: #8a8173;
-  --line: #e3d9c6;
-  --line-strong: #cfc2aa;
-  --accent: #3e6a56;
-  --accent-ink: #fbf8f2;
-  --accent-soft: #dfe8de;
-  --warn: #9c4f2c;
-  --warn-soft: #f4e2d6;
-  --focus: #3e6a56;
-  --shadow: 0 1px 2px rgb(60 48 30 / 0.06), 0 6px 18px -8px rgb(60 48 30 / 0.12);
+  --paper: #fdfdfc;
+  --paper-deep: #f1f3f5;
+  --card: #ffffff;
+  --ink: #2a313c;
+  --ink-soft: #5a6472;
+  --ink-faint: #8a93a0;
+  --line: #e2e7ed;
+  --line-strong: #c8d0da;
+  --rule: #d9e4f1;
+  --margin: #f0b9b6;
+  --accent: #3d5b78;
+  --accent-ink: #ffffff;
+  --accent-soft: #e4edf7;
+  --sage: #a9bdb0;
+  --sage-deep: #8fa698;
+  --wood: #e4cba2;
+  --warn: #a2483a;
+  --warn-soft: #f9e7e3;
+  --focus: #3d5b78;
+  --shadow: 0 1px 1px rgb(40 52 70 / 0.08), 0 4px 10px -4px rgb(40 52 70 / 0.18);
+  --shadow-lift: 0 2px 2px rgb(40 52 70 / 0.08), 0 10px 22px -10px rgb(40 52 70 / 0.28);
 }
 
 @theme inline {
@@ -35,24 +41,46 @@
   --color-accent: var(--accent);
   --color-accent-ink: var(--accent-ink);
   --color-accent-soft: var(--accent-soft);
+  --color-sage: var(--sage);
   --color-warn: var(--warn);
   --color-warn-soft: var(--warn-soft);
-  --font-serif: var(--font-fraunces);
-  --font-sans: var(--font-figtree);
+  --font-display: var(--font-nunito);
+  --font-sans: var(--font-nunito);
   --shadow-soft: var(--shadow);
-  --radius-xl: 1.25rem;
-  --radius-2xl: 1.5rem;
+  --shadow-lift: var(--shadow-lift);
 }
 
-html,
-body {
+html {
   background: var(--paper);
   color: var(--ink);
 }
 
+/* Lined notebook paper: a 32px tile with one faint blue rule. The red margin is drawn by .paper-margin. */
 body {
-  font-family: var(--font-figtree), ui-sans-serif, system-ui, sans-serif;
+  font-family: var(--font-nunito), ui-rounded, system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
+  background-color: var(--paper);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='32'%3E%3Crect y='31' width='8' height='1' fill='%23d9e4f1'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+  background-attachment: local;
+}
+
+.paper-margin {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  left: 72px;
+  width: 1.5px;
+  background: var(--margin);
+  opacity: 0.8;
+  pointer-events: none;
+  z-index: 0;
+}
+@media (max-width: 640px) {
+  .paper-margin {
+    left: 14px;
+    opacity: 0.55;
+  }
 }
 
 ::selection {
@@ -62,11 +90,94 @@ body {
 :focus-visible {
   outline: 2px solid var(--focus);
   outline-offset: 3px;
-  border-radius: 0.5rem;
+  border-radius: 0.6rem;
 }
 
-.font-serif {
-  font-variation-settings: "SOFT" 60, "WONK" 0;
+/* A sheet of paper cut out and laid on the page. */
+.cutout {
+  background: var(--card);
+  border-radius: 1.1rem;
+  box-shadow: 0 0 0 1px rgb(40 52 70 / 0.05), var(--shadow);
+}
+.cutout-lift {
+  background: var(--card);
+  border-radius: 1.1rem;
+  box-shadow: 0 0 0 1px rgb(40 52 70 / 0.05), var(--shadow-lift);
+}
+
+/* ── Popsicle-stick puppets ─────────────────────────────────────
+   The whole cutout moves as one object around the bottom of its stick,
+   as if a child were waggling it from below. */
+.puppet {
+  transform-origin: 50% 100%;
+  will-change: transform;
+}
+.puppet[data-state="idle"] {
+  animation: puppet-idle var(--idle-dur, 6s) ease-in-out var(--delay, 0s) infinite;
+}
+.puppet[data-state="thinking"] {
+  animation: puppet-think var(--idle-dur, 6s) ease-in-out var(--delay, 0s) infinite;
+}
+.puppet[data-state="speaking"][data-style="a"] {
+  animation: wag-a 0.95s ease-in-out infinite;
+}
+.puppet[data-state="speaking"][data-style="b"] {
+  animation: wag-b 1.2s ease-in-out infinite;
+}
+.puppet[data-state="speaking"][data-style="c"] {
+  animation: wag-c 0.8s ease-in-out infinite;
+}
+.puppet-jolt {
+  transform-origin: 50% 100%;
+}
+.puppet-jolt[data-jolt="1"] {
+  animation: jolt 0.45s cubic-bezier(0.3, 1.6, 0.5, 1);
+}
+.puppet-jolt[data-jolt="2"] {
+  animation: jolt-shake 0.5s ease-in-out;
+}
+
+@keyframes puppet-idle {
+  0%, 100% { transform: rotate(-0.6deg); }
+  50% { transform: rotate(0.6deg) translateY(-1px); }
+}
+@keyframes puppet-think {
+  0%, 100% { transform: rotate(-1.5deg) translateY(0); }
+  40% { transform: rotate(1deg) translateY(-3px); }
+  70% { transform: rotate(-0.5deg) translateY(-1px); }
+}
+@keyframes wag-a {
+  0% { transform: rotate(-4deg) translateY(0); }
+  25% { transform: rotate(3deg) translateY(-7px); }
+  50% { transform: rotate(-2deg) translateY(-1px); }
+  75% { transform: rotate(5deg) translateY(-5px); }
+  100% { transform: rotate(-4deg) translateY(0); }
+}
+@keyframes wag-b {
+  0% { transform: rotate(2deg) translateY(0); }
+  20% { transform: rotate(-3deg) translateY(-4px); }
+  45% { transform: rotate(4deg) translateY(-9px); }
+  70% { transform: rotate(-1deg) translateY(-2px); }
+  100% { transform: rotate(2deg) translateY(0); }
+}
+@keyframes wag-c {
+  0%, 100% { transform: rotate(0deg) translateY(0); }
+  15% { transform: rotate(-5deg) translateY(-5px); }
+  35% { transform: rotate(4deg) translateY(-2px); }
+  55% { transform: rotate(-3deg) translateY(-8px); }
+  80% { transform: rotate(2deg) translateY(-1px); }
+}
+@keyframes jolt {
+  0% { transform: translateY(0) scale(1); }
+  40% { transform: translateY(-14px) scale(1.04, 0.97); }
+  100% { transform: translateY(0) scale(1); }
+}
+@keyframes jolt-shake {
+  0%, 100% { transform: rotate(0); }
+  20% { transform: rotate(-6deg); }
+  40% { transform: rotate(6deg); }
+  60% { transform: rotate(-4deg); }
+  80% { transform: rotate(3deg); }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -74,6 +185,7 @@ body {
   *::before,
   *::after {
     animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
 }

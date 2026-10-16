@@ -5,7 +5,6 @@ import { ExpertProfile, type ExpertCard } from "@/core/expert";
 import type { BoardCandidate } from "@/core/board";
 
 const DIR = path.join(process.cwd(), "src", "experts", "profiles");
-const ART_DIR = path.join(process.cwd(), "public", "reviewers");
 
 export type LoadResult = { profiles: ExpertProfile[]; errors: { file: string; message: string }[] };
 
@@ -47,24 +46,17 @@ export function getProfile(id: string): ExpertProfile | null {
   return liveProfiles().find((p) => p.id === id) ?? null;
 }
 
-const POSES = ["neutral", "talk-a", "talk-b", "thinking", "agree", "disagree"];
-
-/** Art is used only when the full pose set exists; otherwise the monogram is shown. */
-export function hasArt(id: string): boolean {
-  return POSES.every((pose) => fs.existsSync(path.join(ART_DIR, id, `${pose}.png`)));
-}
-
 export function toCard(p: ExpertProfile): ExpertCard {
   return {
     id: p.id,
     name: p.name,
     field: p.field,
+    short: p.short,
     lens: p.lens,
     color: p.art.color,
     initials: p.art.initials,
     categories: p.categories,
     covers: p.covers,
-    hasArt: hasArt(p.id),
   };
 }
 

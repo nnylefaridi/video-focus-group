@@ -5,7 +5,7 @@ import { connection } from "next/server";
 import { isServable, verifyMediaSignature } from "@/server/media";
 import { reviewDir } from "@/server/reviews";
 
-const TYPES: Record<string, string> = { ".mp4": "video/mp4", ".jpg": "image/jpeg" };
+const TYPES: Record<string, string> = { ".mp4": "video/mp4", ".jpg": "image/jpeg", ".vtt": "text/vtt; charset=utf-8" };
 
 /** Signed, short-lived access to a review's media. Supports Range requests so the player can seek. */
 export async function GET(req: Request, ctx: RouteContext<"/api/media/[id]/[...file]">) {

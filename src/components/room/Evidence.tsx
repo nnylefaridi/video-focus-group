@@ -73,6 +73,14 @@ export function SeenEvidence({ ids }: { ids: string[] }) {
   );
 }
 
+/** A short label for a principle chip: its first clause, cut at a word boundary. */
+function chipLabel(statement: string): string {
+  const first = statement.split(/[.;:,(]/)[0].trim();
+  if (first.length <= 44) return first;
+  const cut = first.slice(0, 44);
+  return `${cut.slice(0, cut.lastIndexOf(" "))}…`;
+}
+
 const CONFIDENCE: Record<string, string> = {
   well_documented: "Well documented",
   stated_once: "Stated in one source",
@@ -99,7 +107,7 @@ export function PrincipleChips({ ids }: { ids: string[] }) {
             }`}
           >
             <Book className="h-3.5 w-3.5" />
-            {view.principles[id].statement.split(/[.;,]/)[0].slice(0, 48)}
+            {chipLabel(view.principles[id].statement)}
           </button>
         ))}
       </div>
@@ -129,20 +137,60 @@ export function BasisLabel({ basis }: { basis: "documented" | "application" | "g
   return <span className="text-xs text-ink-soft">{text}</span>;
 }
 
-/** Renders model text, turning [F012]-style citations into time chips and {principle-id} into nothing visible (shown as chips separately). */
-export function CitedText({ text }: { text: string }) {
+/** One line of model text: **bold**, [F012]-style citations as time chips, {principle-id} hidden (shown as chips below). */
+function Inline({ text }: { text: string }) {
   const parts: ReactNode[] = [];
-  const re = /\[([FTSA]\d+)\]|\{([a-z0-9-]+)\}/g;
+  const re = /\*\*([^*]+)\*\*|\[([FTSA]\d+(?:,\s*[FTSA]\d+)*)\]|\{([a-z0-9-]+)\}/g;
   let last = 0;
   let m: RegExpExecArray | null;
   let k = 0;
   while ((m = re.exec(text))) {
     if (m.index > last) parts.push(text.slice(last, m.index));
-    if (m[1] && evidenceKind(m[1])) parts.push(<TimeChip key={k++} ids={[m[1]]} className="mx-0.5 align-baseline" />);
+    if (m[1]) parts.push(<strong key={k++} className="font-extrabold">{m[1]}</strong>);
+    if (m[2]) {
+      const ids = m[2].split(/,\s*/).filter((id) => evidenceKind(id));
+      if (ids.length) parts.push(<TimeChip key={k++} ids={ids} className="mx-0.5 align-baseline" />);
+    }
     last = re.lastIndex;
   }
   if (last < text.length) parts.push(text.slice(last));
   return <>{parts}</>;
+}
+
+/** Renders a reviewer's chat answer: paragraphs and simple bullet lists, with citations turned into time chips. */
+export function CitedText({ text }: { text: string }) {
+  const blocks: ReactNode[] = [];
+  let bullets: string[] = [];
+  const flush = () => {
+    if (!bullets.length) return;
+    blocks.push(
+      <ul key={blocks.length} className="my-1.5 list-disc space-y-1 pl-5">
+        {bullets.map((b, i) => (
+          <li key={i}>
+            <Inline text={b} />
+          </li>
+        ))}
+      </ul>,
+    );
+    bullets = [];
+  };
+  for (const raw of text.split("\n")) {
+    const line = raw.trim();
+    const bullet = line.match(/^[-*•]\s+(.*)$/);
+    if (bullet) {
+      bullets.push(bullet[1]);
+      continue;
+    }
+    flush();
+    if (line)
+      blocks.push(
+        <p key={blocks.length} className="my-1.5">
+          <Inline text={line.replace(/^#+\s*/, "")} />
+        </p>,
+      );
+  }
+  flush();
+  return <>{blocks}</>;
 }
 
 export function principleIdsIn(text: string): string[] {

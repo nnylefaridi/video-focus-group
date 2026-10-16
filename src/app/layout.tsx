@@ -1,27 +1,24 @@
 import type { Metadata } from "next";
-import { Figtree, Fraunces } from "next/font/google";
+import { Nunito } from "next/font/google";
 import "./globals.css";
 
-const fraunces = Fraunces({
-  variable: "--font-fraunces",
-  subsets: ["latin"],
-  axes: ["SOFT", "opsz"],
-});
-
-const figtree = Figtree({
-  variable: "--font-figtree",
+const nunito = Nunito({
+  variable: "--font-nunito",
   subsets: ["latin"],
 });
 
 export const metadata: Metadata = {
   title: "Panel",
-  description: "Show your short video to a panel of the people who wrote the book on it.",
+  description: "Show your short video to a paper board of the people who wrote the book on it.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${fraunces.variable} ${figtree.variable} h-full`}>
-      <body className="min-h-full">{children}</body>
+    <html lang="en" className={`${nunito.variable} h-full`}>
+      <body className="min-h-full">
+        <div className="paper-margin" aria-hidden />
+        <div className="relative z-[1]">{children}</div>
+      </body>
     </html>
   );
 }

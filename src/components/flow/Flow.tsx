@@ -9,7 +9,7 @@ import type { ExpertCard } from "@/core/expert";
 import { QuestionStep } from "./QuestionStep";
 import { BoardStep } from "./BoardStep";
 import { UploadStep } from "./UploadStep";
-import { Avatar } from "../Avatar";
+import { Puppet } from "../puppets/Puppet";
 
 type Step = "questions" | "board" | "upload";
 type Saved = { answers: Answer[]; step: Step; board: string[] | null; editing: string | null };
@@ -152,20 +152,21 @@ export function Flow() {
         )}
       </AnimatePresence>
 
-      {/* The board quietly gathers at the bottom edge while you answer. */}
+      {/* As your board takes shape, its puppets peek up from the bottom edge of the page. */}
       {step === "questions" && !editing && boardCards.length > 0 && (
-        <div className="pointer-events-none fixed inset-x-0 bottom-5 flex justify-center">
-          <div className="flex items-end gap-3">
+        <div className="pointer-events-none fixed inset-x-0 bottom-0 flex justify-center overflow-hidden" aria-hidden>
+          <div className="flex items-end gap-2 sm:gap-4">
             <AnimatePresence>
               {boardCards.map((c, i) => (
                 <motion.div
                   key={c.id}
-                  initial={{ opacity: 0, y: 24 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: 24 }}
-                  transition={{ delay: i * 0.12, type: "spring", stiffness: 180, damping: 18 }}
+                  className="w-[76px] sm:w-[96px]"
+                  initial={{ y: "110%" }}
+                  animate={{ y: "38%" }}
+                  exit={{ y: "110%" }}
+                  transition={{ delay: i * 0.15, type: "spring", stiffness: 140, damping: 15 }}
                 >
-                  <Avatar card={c} size={44} />
+                  <Puppet id={c.id} name={c.name} delay={i * 0.6} stick={0.35} />
                 </motion.div>
               ))}
             </AnimatePresence>

@@ -11,12 +11,20 @@ const GENERIC = /\b(know your audience|make it (more )?engaging|be (more )?authe
 
 const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9 ]+/g, " ").replace(/\s+/g, " ").trim();
 
-/** Quoted spans of 4+ words must come from a verified excerpt or from the video itself. */
-function unverifiedQuote(text: string, allowed: string[]): string | null {
+const ATTRIBUTION = /\b(i (always |often )?(say|said|wrote|write|tell|told|put it)|as i('ve| have)? (said|written|put it)|my (line|phrase|rule|saying)|in my (book|talk|words))\b[^"“]{0,40}$/i;
+
+/**
+ * Quoted spans of 4+ words must come from a verified excerpt or from the video itself.
+ * In suggested changes, quoted wording is allowed (it's a proposed line for the creator)
+ * unless it is framed as something the expert has said or written.
+ */
+function unverifiedQuote(text: string, allowed: string[], suggestion = false): string | null {
   for (const m of text.matchAll(/["“]([^"”]{8,})["”]/g)) {
     const q = norm(m[1]);
     if (q.split(" ").length < 4) continue;
-    if (!allowed.some((a) => norm(a).includes(q))) return m[1];
+    if (allowed.some((a) => norm(a).includes(q))) continue;
+    if (suggestion && !ATTRIBUTION.test(text.slice(0, m.index))) continue;
+    return m[1];
   }
   return null;
 }
@@ -34,9 +42,9 @@ function cleanIds(ids: string[], ledger: Ledger): string[] {
 }
 
 /** Problems with free text that make an item unusable. */
-function textProblem(text: string, allowed: string[]): string | null {
+function textProblem(text: string, allowed: string[], suggestion = false): string | null {
   if (PREDICTION.test(text)) return "performance prediction";
-  const q = unverifiedQuote(text, allowed);
+  const q = unverifiedQuote(text, allowed, suggestion);
   if (q) return `unverified quote "${q.slice(0, 60)}"`;
   return null;
 }
@@ -72,7 +80,7 @@ export function validateNotes(
   const recommendations = notes.recommendations.flatMap((r) => {
     const evidenceIds = cleanIds(r.evidenceIds, ledger);
     if (evidenceIds.length === 0) return report.dropped.push(`${r.id}: no valid evidence`), [];
-    const problem = textProblem(`${r.change} ${r.why}`, allowed);
+    const problem = textProblem(r.change, allowed, true) ?? textProblem(r.why, allowed);
     if (problem) return report.dropped.push(`${r.id}: ${problem}`), [];
     if (GENERIC.test(r.change) && r.principleIds.length === 0) return report.dropped.push(`${r.id}: generic advice`), [];
     return [fixPrinciples({ ...r, evidenceIds }, r.id)];
@@ -143,7 +151,11 @@ export function validateSynthesis(s: Synthesis, ledger: Ledger, reviewerIds: str
       .filter((d) => d.positions.length >= 2),
     plan: {
       high: s.plan.high
-        .filter((h, i) => textOk(`plan.high ${i + 1}`, `${h.change} ${h.why}`))
+        .filter((h, i) => {
+          const p = textProblem(h.change, allowed, true) ?? textProblem(h.why, allowed);
+          if (p) report.dropped.push(`plan.high ${i + 1}: ${p}`);
+          return !p;
+        })
         .map((h) => ({ ...h, reviewerIds: rv(h.reviewerIds), evidenceIds: ev(h.evidenceIds) }))
         .filter((h) => h.evidenceIds.length > 0),
       experiments: s.plan.experiments

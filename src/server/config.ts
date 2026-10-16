@@ -2,10 +2,10 @@ import path from "node:path";
 import fs from "node:fs";
 import crypto from "node:crypto";
 
-export const DATA_DIR = path.resolve(process.env.DATA_DIR ?? path.join(process.cwd(), "data"));
+export const DATA_DIR = path.resolve(/* turbopackIgnore: true */ process.env.DATA_DIR ?? path.join(/* turbopackIgnore: true */ process.cwd(), "data"));
 export const MEDIA_DIR = path.join(DATA_DIR, "media");
 export const DB_PATH = path.join(DATA_DIR, "app.db");
-export const WHISPER_MODEL = path.resolve(process.env.WHISPER_MODEL ?? path.join(DATA_DIR, "models", "ggml-base.en.bin"));
+export const WHISPER_MODEL = path.resolve(/* turbopackIgnore: true */ process.env.WHISPER_MODEL ?? path.join(/* turbopackIgnore: true */ DATA_DIR, "models", "ggml-base.en.bin"));
 
 export const LIMITS = {
   maxBytes: 250 * 1024 * 1024,

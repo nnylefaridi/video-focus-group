@@ -16,8 +16,7 @@
     "check": "npm run typecheck && npm run lint && npm run test && npm run lint:design && npm run kb:validate",
     "e2e": "playwright test",
     "eval": "tsx scripts/eval.mts",
-    "smoke": "tsx --env-file-if-exists=.env.local scripts/smoke-review.mts",
-    "art": "tsx --env-file-if-exists=.env.local scripts/make-art.mts"
+    "smoke": "tsx --env-file-if-exists=.env.local scripts/smoke-review.mts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.135.0",

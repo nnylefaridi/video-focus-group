@@ -53,3 +53,49 @@ export const Book = ({ className }: P) => (
     <path d="M5 20.5A2.5 2.5 0 0 0 7.5 23H19" transform="translate(0 -2)" />
   </svg>
 );
+export const Board = ({ className }: P) => (
+  <svg viewBox="0 0 24 24" className={className} aria-hidden {...base}>
+    <circle cx="7" cy="8.5" r="2.3" />
+    <circle cx="12" cy="7" r="2.6" />
+    <circle cx="17" cy="8.5" r="2.3" />
+    <path d="M3.5 18c.4-3 2-4.6 3.5-4.6M20.5 18c-.4-3-2-4.6-3.5-4.6M7.8 18.5c.4-3.4 2.1-5.2 4.2-5.2s3.8 1.8 4.2 5.2" />
+  </svg>
+);
+export const Frame = ({ className }: P) => (
+  <svg viewBox="0 0 24 24" className={className} aria-hidden {...base}>
+    <rect x="3.5" y="5" width="17" height="13" rx="3" />
+    <path d="m10.3 9.3 4.2 2.7-4.2 2.7z" />
+  </svg>
+);
+export const Bubbles = ({ className }: P) => (
+  <svg viewBox="0 0 24 24" className={className} aria-hidden {...base}>
+    <path d="M4 6.5A2.5 2.5 0 0 1 6.5 4h7A2.5 2.5 0 0 1 16 6.5v4a2.5 2.5 0 0 1-2.5 2.5H9l-3.5 3v-3H6.5A2.5 2.5 0 0 1 4 10.5z" />
+    <path d="M18.5 9.5A2 2 0 0 1 20 11.4v3.6a2 2 0 0 1-2 2h-.5v2.5L14.6 17H12" />
+  </svg>
+);
+export const Checklist = ({ className }: P) => (
+  <svg viewBox="0 0 24 24" className={className} aria-hidden {...base}>
+    <rect x="5" y="3.8" width="14" height="17" rx="2.5" />
+    <path d="m8.2 9 1.4 1.4L12 8M8.2 14.5l1.4 1.4 2.4-2.4M14 9.5h2.3M14 15h2.3" />
+  </svg>
+);
+export const Play = ({ className }: P) => (
+  <svg viewBox="0 0 24 24" className={className} aria-hidden {...base}>
+    <path d="M8 5.8v12.4a1 1 0 0 0 1.5.9l9.8-6.2a1 1 0 0 0 0-1.7L9.5 4.9A1 1 0 0 0 8 5.8z" />
+  </svg>
+);
+export const Pause = ({ className }: P) => (
+  <svg viewBox="0 0 24 24" className={className} aria-hidden {...base}>
+    <path d="M8.5 5.5v13M15.5 5.5v13" />
+  </svg>
+);
+export const Prev = ({ className }: P) => (
+  <svg viewBox="0 0 24 24" className={className} aria-hidden {...base}>
+    <path d="M6.5 6v12M18 6.5v11a.8.8 0 0 1-1.2.7l-8.3-5.5a.8.8 0 0 1 0-1.4l8.3-5.5a.8.8 0 0 1 1.2.7z" />
+  </svg>
+);
+export const Next = ({ className }: P) => (
+  <svg viewBox="0 0 24 24" className={className} aria-hidden {...base}>
+    <path d="M17.5 6v12M6 6.5v11a.8.8 0 0 0 1.2.7l8.3-5.5a.8.8 0 0 0 0-1.4L7.2 5.8A.8.8 0 0 0 6 6.5z" />
+  </svg>
+);

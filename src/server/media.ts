@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import { MEDIA_SECRET } from "./config";
 
 /** Files inside a review folder that may be served to the browser. */
-const SERVABLE = /^(video\.mp4|poster\.jpg|frames\/F\d{3,4}\.jpg)$/;
+const SERVABLE = /^(video\.mp4|poster\.jpg|captions\.vtt|frames\/F\d{3,4}\.jpg)$/;
 
 export function isServable(file: string): boolean {
   return SERVABLE.test(file);

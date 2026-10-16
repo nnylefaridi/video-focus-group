@@ -68,6 +68,8 @@ export const ExpertProfile = z.object({
   id: z.string(),
   name: z.string(),
   field: z.string(),
+  /** Two or three words for the name card on the table. */
+  short: z.string().max(28),
   lens: z.string(),
   bio: z.string(),
   status: z.enum(["verified", "draft"]),
@@ -98,10 +100,10 @@ export type ExpertCard = {
   id: string;
   name: string;
   field: string;
+  short: string;
   lens: string;
   color: string;
   initials: string;
   categories: ("creator" | "ad")[];
   covers: Dimension[];
-  hasArt: boolean;
 };

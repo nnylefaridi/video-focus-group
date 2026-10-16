@@ -31,16 +31,16 @@ export function QuestionStep({ question, answers, existing, onSubmit, onBack, re
     <div className="mx-auto w-full max-w-xl">
       <div className="mb-8 flex h-6 items-center justify-between text-sm text-ink-soft">
         {onBack ? (
-          <button onClick={onBack} className="-ml-2 inline-flex items-center gap-1.5 rounded-full px-2 py-1 transition-colors hover:text-ink">
+          <button onClick={onBack} className="-ml-2 inline-flex items-center gap-1.5 rounded-full px-2 py-1 font-semibold transition-colors hover:text-ink">
             <ArrowLeft className="h-4 w-4" /> Back
           </button>
         ) : (
           <span />
         )}
-        {remaining !== null && remaining > 0 && <span>{remaining === 1 ? "Last one" : `About ${remaining} more`}</span>}
+        {remaining !== null && remaining > 0 && <span className="font-semibold">{remaining === 1 ? "Last one" : `About ${remaining} more`}</span>}
       </div>
 
-      <h1 className="font-serif text-[2rem] leading-[1.15] tracking-[-0.01em] text-ink sm:text-[2.5rem]">{question.prompt}</h1>
+      <h1 className="font-display text-[2rem] leading-[1.15] font-extrabold tracking-[-0.015em] text-ink sm:text-[2.6rem]">{question.prompt}</h1>
       {question.helper && <p className="mt-3 text-base text-ink-soft">{question.helper}</p>}
 
       <div className="mt-8">
@@ -54,7 +54,7 @@ export function QuestionStep({ question, answers, existing, onSubmit, onBack, re
       {question.optional && (
         <button
           onClick={() => onSubmit({ questionId: question.id, display: "Skipped", fields: {}, skipped: true })}
-          className="mt-5 rounded-full px-1 text-sm text-ink-soft underline decoration-line-strong underline-offset-4 transition-colors hover:text-ink"
+          className="mt-5 rounded-full px-1 text-sm font-semibold text-ink-soft underline decoration-line-strong underline-offset-4 transition-colors hover:text-ink"
         >
           Skip this one
         </button>
@@ -105,7 +105,7 @@ function TextAnswer({ question, answers, existing, onSubmit }: Omit<Props, "onBa
 
   return (
     <div>
-      <div className="relative rounded-[1.4rem] border border-line bg-card shadow-soft transition-colors focus-within:border-line-strong">
+      <div className="cutout-lift relative -rotate-[0.4deg] rounded-[1.4rem] transition-transform focus-within:rotate-0">
         <label htmlFor="answer" className="sr-only">
           {question.prompt}
         </label>
@@ -126,7 +126,7 @@ function TextAnswer({ question, answers, existing, onSubmit }: Omit<Props, "onBa
             }
           }}
           placeholder={spec?.placeholder}
-          className="block max-h-64 w-full resize-none bg-transparent px-5 pt-4 pb-14 text-lg leading-relaxed text-ink outline-none placeholder:text-ink-faint"
+          className="block max-h-64 w-full resize-none bg-transparent px-5 pt-4 pb-14 text-lg font-semibold leading-relaxed text-ink outline-none placeholder:font-normal placeholder:text-ink-faint"
         />
         <button
           onClick={send}
@@ -154,7 +154,7 @@ function TextAnswer({ question, answers, existing, onSubmit }: Omit<Props, "onBa
                   setValue(s);
                   ref.current?.focus();
                 }}
-                className="rounded-full border border-line bg-card px-3.5 py-1.5 text-sm text-ink-soft transition-colors hover:border-line-strong hover:text-ink"
+                className="cutout rounded-full px-3.5 py-1.5 text-sm font-semibold text-ink-soft transition-all hover:-translate-y-0.5 hover:text-ink"
               >
                 {s}
               </button>
@@ -198,8 +198,8 @@ function ChoiceAnswer({ question, existing, onSubmit }: Pick<Props, "question" |
               role={spec.multi ? "checkbox" : "radio"}
               aria-checked={on}
               onClick={() => pick(o.label)}
-              className={`rounded-full border px-5 py-2.5 text-base transition-all ${
-                on ? "border-accent bg-accent-soft text-ink" : "border-line bg-card text-ink hover:border-line-strong hover:shadow-soft"
+              className={`rounded-full px-5 py-2.5 text-base font-bold transition-all ${
+                on ? "bg-accent-soft text-accent ring-2 ring-accent" : "cutout text-ink hover:-translate-y-0.5 hover:shadow-lift"
               }`}
             >
               {o.label}
@@ -217,7 +217,7 @@ function ChoiceAnswer({ question, existing, onSubmit }: Pick<Props, "question" |
               fields: mergeSets(spec.options.filter((o) => selected.includes(o.label)).map((o) => o.set)),
             })
           }
-          className="mt-6 rounded-full bg-accent px-6 py-2.5 text-base text-accent-ink transition-all hover:brightness-110 disabled:bg-paper-deep disabled:text-ink-faint"
+          className="mt-6 rounded-full bg-accent px-6 py-2.5 text-base font-bold text-accent-ink transition-all hover:brightness-110 disabled:bg-paper-deep disabled:text-ink-faint"
         >
           Continue
         </button>

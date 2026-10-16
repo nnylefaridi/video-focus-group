@@ -13,7 +13,7 @@ const RULES = `You are answering the creator's follow-up questions as one review
 - When you rely on one of this reviewer's documented principles, cite it as {principle-id}, for example {ah-value-equation}. Distinguish what they documented from how you're applying it.
 - Stay in this reviewer's lane and voice: their priorities, their reasoning order, their tone. No catchphrase parody, no invented anecdotes, and no quotation marks around their words unless the text is a verified excerpt from their profile.
 - Never predict views, virality, sales or performance.
-- Be concise and concrete: what to change, where, and why.`;
+- Be concise and concrete: what to change, where, and why. Write short paragraphs; simple "- " bullets and **bold** are fine, but no headings or tables.`;
 
 export const INSPECT_TOOL: Anthropic.Beta.BetaTool = {
   name: "inspect_moment",

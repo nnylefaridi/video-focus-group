@@ -63,8 +63,8 @@ export function UploadStep({ answers, board, onBack, onDone }: { answers: Answer
       <button onClick={onBack} disabled={uploading} className="-ml-2 mb-8 inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-sm text-ink-soft transition-colors hover:text-ink disabled:opacity-40">
         <ArrowLeft className="h-4 w-4" /> Back
       </button>
-      <h1 className="font-serif text-[2rem] leading-tight text-ink sm:text-[2.5rem]">Now, the video</h1>
-      <p className="mt-3 text-ink-soft">MP4, MOV or WebM, up to 3 minutes and 250 MB.</p>
+      <h1 className="font-display text-[2rem] leading-tight font-extrabold text-ink sm:text-[2.6rem]">Now, the video</h1>
+      <p className="mt-3 font-semibold text-ink-soft">MP4, MOV or WebM, up to 3 minutes and 250 MB.</p>
 
       <div
         onDragOver={(e) => {
@@ -78,13 +78,13 @@ export function UploadStep({ answers, board, onBack, onDone }: { answers: Answer
           const f = e.dataTransfer.files[0];
           if (f && !uploading) start(f);
         }}
-        className={`mt-8 rounded-[1.6rem] border-2 border-dashed px-6 py-12 text-center transition-colors ${
-          drag ? "border-accent bg-accent-soft" : "border-line-strong bg-card"
+        className={`cutout-lift mt-8 rotate-[0.3deg] rounded-[1.6rem] px-6 py-12 text-center outline-2 outline-offset-[-14px] outline-dashed transition-colors ${
+          drag ? "bg-accent-soft outline-accent" : "outline-line-strong"
         }`}
       >
         {uploading ? (
           <div aria-live="polite">
-            <p className="font-serif text-xl text-ink">{progress! < 1 ? "Uploading…" : "Checking your video…"}</p>
+            <p className="font-display font-extrabold text-xl text-ink">{progress! < 1 ? "Uploading…" : "Checking your video…"}</p>
             <div className="mx-auto mt-5 h-2 max-w-xs overflow-hidden rounded-full bg-paper-deep">
               <div className="h-full rounded-full bg-accent transition-[width] duration-200" style={{ width: `${Math.round(progress! * 100)}%` }} />
             </div>
@@ -93,10 +93,10 @@ export function UploadStep({ answers, board, onBack, onDone }: { answers: Answer
         ) : (
           <>
             <Film className="mx-auto h-10 w-10 text-ink-soft" />
-            <p className="mt-4 text-ink">Drop your video here</p>
+            <p className="mt-4 font-bold text-ink">Drop your video here</p>
             <button
               onClick={() => input.current?.click()}
-              className="mt-4 rounded-full bg-accent px-6 py-2.5 text-accent-ink transition-all hover:brightness-110"
+              className="mt-4 rounded-full bg-accent px-6 py-2.5 font-bold text-accent-ink transition-all hover:brightness-110"
             >
               Choose a file
             </button>

@@ -3,7 +3,7 @@ import path from "node:path";
 import type { Coverage, Ledger } from "@/core/evidence";
 import type { ReviewerNotes } from "@/core/review";
 import { probe } from "@/media/probe";
-import { audioSignals, denseSample, detectShots, normalize, sampleFrames, transcribe } from "@/media/pipeline";
+import { audioSignals, denseSample, detectShots, normalize, sampleFrames, transcribe, writeCaptions } from "@/media/pipeline";
 import { perceiveFrames } from "@/ai/perceive";
 import { composeDiscussion, evidenceBlocks, reviewerPass, synthesize } from "@/ai/review";
 import { getProfile } from "@/experts/load";
@@ -55,6 +55,7 @@ export async function processReview(id: string) {
 
     stage("transcribing");
     const transcript = await transcribe(dir);
+    if (transcript.length) writeCaptions(dir, transcript);
 
     stage("sampling");
     const shots = await detectShots(dir, p.durationSec);

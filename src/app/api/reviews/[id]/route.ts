@@ -45,9 +45,14 @@ export async function GET(_req: Request, ctx: RouteContext<"/api/reviews/[id]">)
     board: profiles.map(toCard),
     video:
       r.video && ready
-        ? { url: signedMediaUrl(id, "video.mp4"), poster: signedMediaUrl(id, "poster.jpg"), ...r.video }
+        ? {
+            url: signedMediaUrl(id, "video.mp4"),
+            poster: signedMediaUrl(id, "poster.jpg"),
+            captions: fs.existsSync(path.join(reviewDir(id), "captions.vtt")) ? signedMediaUrl(id, "captions.vtt") : null,
+            ...r.video,
+          }
         : r.video
-          ? { url: null, poster: null, ...r.video }
+          ? { url: null, poster: null, captions: null, ...r.video }
           : null,
     ledger: r.ledger
       ? { ...r.ledger, frames: r.ledger.frames.map((f) => ({ ...f, url: signedMediaUrl(id, f.file) })) }
