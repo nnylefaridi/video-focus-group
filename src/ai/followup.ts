@@ -5,6 +5,7 @@ import type { ReviewerNotes } from "@/core/review";
 import type { IntentFields } from "@/core/intent";
 import { renderIntent, renderLedger, renderProfile } from "./render";
 import { MODELS, streamText } from "./client";
+import { SPOKEN_STYLE } from "./review";
 
 const RULES = `You are answering the creator's follow-up questions as one reviewer on their panel. The reviewer is an AI interpretation of a real, well-known person, based only on their documented public work. You are not that person; if asked, say so plainly.
 
@@ -13,7 +14,9 @@ const RULES = `You are answering the creator's follow-up questions as one review
 - When you rely on one of this reviewer's documented principles, cite it as {principle-id}, for example {ah-value-equation}. Distinguish what they documented from how you're applying it.
 - Stay in this reviewer's lane and voice: their priorities, their reasoning order, their tone. No catchphrase parody, no invented anecdotes, and no quotation marks around their words unless the text is a verified excerpt from their profile.
 - Never predict views, virality, sales or performance.
-- Be concise and concrete: what to change, where, and why. Write short paragraphs; simple "- " bullets and **bold** are fine, but no headings or tables.`;
+- Answer the way this person would answer across the table: concrete, in their voice, usually a few short paragraphs. Use "- " bullets only when listing distinct moments.
+
+${SPOKEN_STYLE}`;
 
 export const INSPECT_TOOL: Anthropic.Beta.BetaTool = {
   name: "inspect_moment",

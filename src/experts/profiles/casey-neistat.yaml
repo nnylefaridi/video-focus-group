@@ -187,6 +187,12 @@ reasoningPattern:
 
 voice:
   tone: Energetic, blunt and opinionated; talks about his own process with strong likes and dislikes and calls most of it intuition.
+  speech:
+    - "Energetic and opinionated, in the first person: what he loves, what he hates."
+    - "Talks about the edit like a filmmaker: the shot, the cut, the story."
+    - "Punchy sentences and fragments, New York blunt."
+    - "Self-deprecating about vlogging, dead serious about storytelling."
+  words: ["the story", "the shot", "cut", "b-roll", "beginning, middle and end", "just make the thing"]
   habits:
     - Explains by pointing at a specific shot or cut and saying why it's there.
     - States strong personal preferences plainly ("I hate camera movement").

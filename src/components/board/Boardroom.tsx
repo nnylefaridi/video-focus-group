@@ -38,16 +38,16 @@ const SEATS: Record<number, number[]> = {
   4: [195, 400, 600, 805],
 };
 
-function useNarrow(ref: React.RefObject<HTMLElement | null>) {
-  const [narrow, setNarrow] = useState(false);
+function useSize(ref: React.RefObject<HTMLElement | null>) {
+  const [size, setSize] = useState({ w: 0, h: 0 });
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    const ro = new ResizeObserver(([e]) => setNarrow(e.contentRect.width < 640));
+    const ro = new ResizeObserver(([e]) => setSize({ w: e.contentRect.width, h: e.contentRect.height }));
     ro.observe(el);
     return () => ro.disconnect();
   }, [ref]);
-  return narrow;
+  return size;
 }
 
 function OrigamiTable() {
@@ -91,20 +91,25 @@ export function Boardroom({
   states,
   onPick,
   children,
+  fitHeight = false,
 }: {
   board: ExpertCard[];
   states: Record<string, PuppetState>;
   onPick?: (id: string) => void;
+  /** Size the theatre to the height it is given (the no-scroll board screen) instead of the width. */
+  fitHeight?: boolean;
   /** The flat video player (and anything under it), overlapping the front of the table. */
   children?: ReactNode;
 }) {
   const ref = useRef<HTMLDivElement>(null);
-  const narrow = useNarrow(ref);
+  const size = useSize(ref);
+  const narrow = size.w > 0 && size.w < 640;
   const n = Math.min(4, Math.max(1, board.length));
   const xs = SEATS[n];
   // Stage proportions: taller on phones so the puppets stay big enough to read.
-  const ratio = narrow ? 0.78 : 0.5;
-  const tableTop = narrow ? 0.52 : 0.45; // where the table starts, as a fraction of stage height
+  // Extra headroom on top leaves space for a speaking puppet to rise on its stick.
+  const ratio = narrow ? 0.84 : 0.56;
+  const tableTop = narrow ? 0.56 : 0.51; // where the table starts, as a fraction of stage height
   // Puppet width in stage units (the wider figure leaves room for gesturing hands).
   const puppetW = 1.2 * (narrow ? (n >= 4 ? 245 : n === 3 ? 300 : 320) : n >= 4 ? 190 : n === 3 ? 215 : 235);
   const figH = puppetW * FIGURE_ASPECT;
@@ -113,9 +118,12 @@ export function Boardroom({
 
   const yOnEdge = (x: number) => tableTop * stageH + (edgeY(x) / 420) * tableH;
 
+  const fitted = fitHeight && !narrow && size.h > 0;
+  const stageWidth = fitted ? Math.min(size.w, size.h / ratio) : undefined;
+
   return (
-    <div ref={ref} className="relative mx-auto w-full">
-      <div className="relative w-full" style={{ aspectRatio: `${W} / ${stageH}` }}>
+    <div ref={ref} className={`relative mx-auto w-full ${fitHeight ? "lg:h-full" : ""}`}>
+      <div className="relative mx-auto" style={{ aspectRatio: `${W} / ${stageH}`, width: stageWidth ?? "100%" }}>
         {board.slice(0, 4).map((c, i) => {
           const x = xs[i];
           const tilt = n === 1 ? 0 : ((x - 500) / 500) * 7;

@@ -7,6 +7,13 @@ import { callStructured, MODELS } from "./client";
 import { labeledFrame, pickReviewerFrames, renderIntent, renderLedger, renderProfile } from "./render";
 import { validateDiscussion, validateNotes, validateSynthesis, type ValidationReport } from "./validate";
 
+/** Shared rules so every reviewer sounds like a person at the table, not an AI assistant. */
+export const SPOKEN_STYLE = `How to sound:
+- Write the way this person talks out loud, sitting across the table from the creator. Follow HOW THEY TALK: their rhythm, sentence length, how they make a point and how they push back.
+- It must not read like an AI assistant. Never use: "great question", "it's worth noting", "additionally", "furthermore", "overall", "in conclusion", "let's dive in", "I'd recommend", "consider", "leverage", "crucial", "key takeaway", "ensure", "enhance", "elevate", "engaging", "compelling", "resonate", "landscape", "in today's".
+- No lists, headings or colons introducing explanations, and no em-dash chains. Plain spoken sentences, contractions, the occasional fragment if that's how they talk.
+- Their characteristic words appear at most once or twice, naturally, never as a catchphrase or quote.`;
+
 const REVIEWER_SYSTEM = `You write one reviewer's notes on one specific short video. The reviewer is an AI interpretation of a real, well-known person, built only from their documented public work (provided below). You are not that person. Never imply they watched, endorsed or personally reviewed this video.
 
 Grounding rules:
@@ -21,11 +28,13 @@ Reviewer rules:
 7. Be specific: every recommendation names the exact moment (by evidence) and the exact change. Stock advice like "know your audience", "make it more engaging" or "add value" is not allowed.
 8. Never predict views, virality, sales, conversions or performance. You may describe the likely viewer experience, with hedged language.
 9. Never put words in this reviewer's mouth inside quotation marks unless the text is a verified excerpt provided in their profile. You may quote the video's own words exactly, and in "change" you may propose new wording for the creator in quotes (a suggested line, caption or title).
-10. Write "claim", "change", "why" and "overall" in the first person, in this reviewer's tone and reasoning order. No catchphrase parody, no invented personal anecdotes or claims about their life or businesses.
+10. Write "claim", "change", "why" and "overall" in the first person, spoken in this reviewer's own voice and reasoning order (see How to sound below). Keep each short: a claim is one or two sentences, a change is one sentence, a why is one or two. No catchphrase parody, no invented personal anecdotes or claims about their life or businesses.
 11. Compare what the creator intended (their answers) with what the video actually does.
 12. Be honest, not flattering. Include what genuinely works in keep.
 
-Size: 4–8 observations, 3–6 recommendations, 1–4 keep items. Use ids o1, o2… and r1, r2….`;
+Size: 4–8 observations, 3–6 recommendations, 1–4 keep items. Use ids o1, o2… and r1, r2….
+
+${SPOKEN_STYLE}`;
 
 export async function evidenceBlocks(dir: string, ledger: Ledger, intent: IntentFields): Promise<Anthropic.Beta.BetaContentBlockParam[]> {
   const frames = pickReviewerFrames(ledger);
@@ -69,7 +78,9 @@ export async function reviewerPass(
   return validateNotes(raw, ledger, profile);
 }
 
-const DISCUSSION_SYSTEM = `You turn independent reviewer notes into a short panel discussion about one video. Each reviewer is an AI interpretation of a real person based on their documented work; they did not actually take part.
+const DISCUSSION_SYSTEM = `You write a real conversation between reviewers sitting around a table, talking about one creator's video. Each reviewer is an AI interpretation of a real person based on their documented work; they did not actually take part.
+
+It should read like people talking, not like reports read aloud. Short turns: one to three sentences, at most about 45 words. People react to each other: agree in a few words, cut in, push back with their own reasoning, ask each other a quick question, call each other by first name. Each person sounds unmistakably like themselves (their HOW THEY TALK guide), and nobody sounds like an AI assistant.
 
 Rules:
 - Use only points that appear in the reviewers' notes. Add no new claims about the video.
@@ -78,8 +89,10 @@ Rules:
 - Each turn's evidenceIds and principleIds must come from that reviewer's own notes.
 - No timestamps in the text and no quotation marks around the reviewers' words. The video's own words may be quoted exactly.
 - Never predict views, virality, sales or performance.
-- Each reviewer speaks in their own documented tone, with no parody or invented anecdotes.
-- 6–12 turns. Open with the most important issue. Every reviewer speaks at least twice. End with each reviewer stating their single top priority (stance "closes").`;
+- Each reviewer speaks in their own documented voice, with no parody or invented anecdotes.
+- 10–16 turns. Open with the most important issue. Every reviewer speaks at least three times. End with each reviewer giving their single top priority in one sentence (stance "closes").
+
+${SPOKEN_STYLE}`;
 
 export async function composeDiscussion(
   reviewId: string,
@@ -89,7 +102,10 @@ export async function composeDiscussion(
   notes: Record<string, ReviewerNotes>,
 ): Promise<{ turns: StoredTurn[]; report: ValidationReport }> {
   const reviewers = board
-    .map((p) => `### ${p.name} (reviewerId: ${p.id})\nTone: ${p.voice.tone}\nHabits: ${p.voice.habits.join("; ")}\nNotes:\n${JSON.stringify(notes[p.id])}`)
+    .map(
+      (p) =>
+        `### ${p.name} (reviewerId: ${p.id})\nHOW THEY TALK:\nTone: ${p.voice.tone}\n${p.voice.speech.map((s) => `- ${s}`).join("\n")}\nWords they lean on: ${p.voice.words.join(", ")}\nNever: ${p.voice.avoid.join("; ")}\nNotes:\n${JSON.stringify(notes[p.id])}`,
+    )
     .join("\n\n");
   const raw = await callStructured({
     label: "discussion",

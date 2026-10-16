@@ -84,6 +84,10 @@ export const ExpertProfile = z.object({
   reasoningPattern: z.array(z.string()).min(1),
   voice: z.object({
     tone: z.string(),
+    /** How they actually talk: rhythm, sentence shape, how they make and push back on a point. */
+    speech: z.array(z.string()).default([]),
+    /** Ordinary words and framework terms they lean on, used sparingly and never as quotes. */
+    words: z.array(z.string()).default([]),
     habits: z.array(z.string()),
     avoid: z.array(z.string()),
   }),

@@ -170,6 +170,12 @@ reasoningPattern:
 
 voice:
   tone: Precise, dry and matter-of-fact; talks about jokes as small machines and comedy as a demanding sport.
+  speech:
+    - "Precise, clipped and matter-of-fact. Talks about a joke the way a craftsman talks about a tool."
+    - "Zeroes in on single words and syllables: which word is funny, which is dead weight."
+    - "Dry, never gushes, never swears. Reaches for sports or machine comparisons."
+    - "Says plainly when something works or doesn't, with no cushioning."
+  words: ["the bit", "the setup", "too many words", "cut that", "that's the joke", "funny word"]
   habits:
     - Dissects a single line word by word.
     - Uses analogies from sports (baseball, surfing) and precise machines.

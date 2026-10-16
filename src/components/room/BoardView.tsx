@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { STAGE_LABELS, type ReviewStage } from "@/core/review";
 import { Boardroom } from "../board/Boardroom";
 import type { PuppetState } from "../puppets/Puppet";
@@ -12,11 +12,23 @@ import { Player } from "./Player";
 import { TimeChip } from "./Evidence";
 
 const STEPS: ReviewStage[] = ["ingesting", "transcribing", "sampling", "perceiving", "reviewing", "discussing", "synthesizing"];
-const TYPE_MS = 28;
-const HOLD_MS = 1500;
 
-/** Plays the panel discussion turn by turn: the speaker's puppet wags while their line types out under the video. */
-function useDiscussion(count: number, lengths: number[], storeKey: string) {
+/* Pacing: lines type out at a gentle 40 characters a second, then stay up long enough
+   to read comfortably (about 230 words a minute) before the next person speaks. */
+const CHARS_PER_TICK = 2;
+const TICK_MS = 50;
+const MS_PER_WORD = 260;
+const MIN_HOLD_MS = 2500;
+
+function holdFor(text: string): number {
+  const words = text.trim().split(/\s+/).length;
+  const typing = (text.length / CHARS_PER_TICK) * TICK_MS;
+  return Math.max(MIN_HOLD_MS, words * MS_PER_WORD - typing);
+}
+
+/** Plays the panel discussion turn by turn: the speaker's puppet wags while their line types out. */
+function useDiscussion(texts: string[], storeKey: string) {
+  const count = texts.length;
   const [idx, setIdx] = useState(0);
   const [typed, setTyped] = useState(0);
   // Start on its own the first time this review is opened; after that, wait for Play.
@@ -34,17 +46,18 @@ function useDiscussion(count: number, lengths: number[], storeKey: string) {
     try {
       localStorage.setItem(storeKey, "1");
     } catch {}
-    if (typed < lengths[idx]) {
-      const t = setTimeout(() => setTyped((n) => Math.min(lengths[idx], n + 2)), TYPE_MS);
+    const text = texts[idx];
+    if (typed < text.length) {
+      const t = setTimeout(() => setTyped((n) => Math.min(text.length, n + CHARS_PER_TICK)), TICK_MS);
       return () => clearTimeout(t);
     }
     const t = setTimeout(() => {
       setIdx((i) => i + 1);
       setTyped(0);
       if (idx + 1 >= count) setPlaying(false);
-    }, HOLD_MS);
+    }, holdFor(text));
     return () => clearTimeout(t);
-  }, [playing, ended, typed, idx, lengths, count, storeKey]);
+  }, [playing, ended, typed, idx, texts, count, storeKey]);
 
   return {
     idx,
@@ -61,7 +74,7 @@ function useDiscussion(count: number, lengths: number[], storeKey: string) {
     pause: () => setPlaying(false),
     prev: () => {
       setIdx((i) => Math.max(0, Math.min(i, count) - 1));
-      setTyped(0);
+      setTyped(Number.MAX_SAFE_INTEGER);
     },
     next: () => {
       setIdx((i) => Math.min(count, i + 1));
@@ -70,23 +83,22 @@ function useDiscussion(count: number, lengths: number[], storeKey: string) {
   };
 }
 
-/** Video in the middle; for vertical video on wide screens the caption sits beside it so everything stays in view. */
-function StageLayout({ video, caption }: { video: React.ReactNode; caption: React.ReactNode }) {
+/**
+ * The board screen: the puppet theatre on top, and below it a designated row with
+ * the video on one side and the discussion on the other. On laptops it fits the
+ * window exactly, so nothing scrolls.
+ */
+function BoardLayout({ states, onPick, video, panel }: { states: Record<string, PuppetState>; onPick?: (id: string) => void; video: React.ReactNode; panel: React.ReactNode }) {
   const { view } = useRoom();
-  const vertical = (view.video?.height ?? 9) > (view.video?.width ?? 16);
-  if (!vertical) {
-    return (
-      <div className="mx-auto w-[94%] sm:w-[62%]">
-        {video}
-        <div className="mx-auto mt-4 max-w-2xl">{caption}</div>
-      </div>
-    );
-  }
   return (
-    <div className="mx-auto w-[94%] md:flex md:w-full md:items-end md:justify-center md:gap-6">
-      <div className="hidden md:block md:flex-[0.35]" />
-      <div className="md:w-auto md:shrink-0">{video}</div>
-      <div className="mt-4 md:mt-0 md:mb-1 md:max-w-[460px] md:min-w-[300px] md:flex-[1.65] md:text-[0.94rem]">{caption}</div>
+    <div className="flex flex-col lg:h-full">
+      <div className="lg:min-h-0 lg:flex-[1.05]">
+        <Boardroom board={view.board} states={states} onPick={onPick} fitHeight />
+      </div>
+      <div className="relative z-[5] mt-3 grid gap-4 lg:-mt-[3dvh] lg:min-h-0 lg:flex-1 lg:grid-cols-[auto_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)] lg:pb-2">
+        <div className="lg:h-full">{video}</div>
+        <div className="min-h-0 lg:h-full">{panel}</div>
+      </div>
     </div>
   );
 }
@@ -106,20 +118,16 @@ export function BoardView({
 }) {
   const { view } = useRoom();
   const ready = view.stage === "done" && Boolean(view.discussion?.length);
+  const video = <Player variant="stage" seekRequest={seekRequest} onTime={onTime} fill />;
 
-  return ready ? (
-    <ReadyBoard seekRequest={seekRequest} onTime={onTime} onPick={onPick} onOpenPlan={onOpenPlan} />
-  ) : (
-    <Boardroom
-      board={view.board}
-      states={Object.fromEntries(
-        view.board.map((c) => [c.id, view.stage === "failed" || view.notes?.[c.id] ? "idle" : "thinking"] as [string, PuppetState]),
-      )}
-    >
-      <StageLayout
-        video={<Player variant="stage" seekRequest={seekRequest} onTime={onTime} />}
-        caption={
-        <div className="cutout px-5 py-4 text-center" aria-live="polite">
+  if (ready) return <ReadyBoard video={video} onPick={onPick} onOpenPlan={onOpenPlan} />;
+
+  return (
+    <BoardLayout
+      states={Object.fromEntries(view.board.map((c) => [c.id, view.stage === "failed" || view.notes?.[c.id] ? "idle" : "thinking"] as [string, PuppetState]))}
+      video={video}
+      panel={
+        <div className="cutout flex h-full flex-col items-center justify-center px-6 py-6 text-center" aria-live="polite">
           {view.stage === "failed" ? (
             <>
               <p className="font-bold text-warn">The review stopped partway.</p>
@@ -149,74 +157,80 @@ export function BoardView({
                   />
                 ))}
               </div>
-              <p className="mt-3 text-xs text-ink-soft">This usually takes a few minutes. You can leave and come back.</p>
+              <p className="mt-3 text-xs text-ink-soft">The panel is watching. This usually takes a few minutes, and you can leave and come back.</p>
             </>
           )}
         </div>
-        }
-      />
-    </Boardroom>
+      }
+    />
   );
 }
 
-function ReadyBoard({
-  seekRequest,
-  onTime,
-  onPick,
-  onOpenPlan,
-}: {
-  seekRequest: { t: number; n: number } | null;
-  onTime: (t: number) => void;
-  onPick: (id: string) => void;
-  onOpenPlan: () => void;
-}) {
+function ReadyBoard({ video, onPick, onOpenPlan }: { video: React.ReactNode; onPick: (id: string) => void; onOpenPlan: () => void }) {
   const { view, card } = useRoom();
   const turns = view.discussion!;
-  const lengths = useMemo(() => turns.map((t) => t.text.length), [turns]);
-  const d = useDiscussion(turns.length, lengths, `panel.played.${view.id}`);
-  const turn = d.ended ? null : turns[d.idx];
-  const speaker = turn ? card(turn.reviewerId) : null;
-  const other = turn?.respondsTo ? card(turn.respondsTo) : null;
+  const texts = useMemo(() => turns.map((t) => t.text), [turns]);
+  const d = useDiscussion(texts, `panel.played.${view.id}`);
+  const current = d.ended ? null : turns[d.idx];
+  const listRef = useRef<HTMLOListElement>(null);
 
   const states = Object.fromEntries(
-    view.board.map((c) => [c.id, d.playing && turn?.reviewerId === c.id && d.typed < turn.text.length ? "speaking" : "idle"] as [string, PuppetState]),
+    view.board.map((c) => [c.id, d.playing && current?.reviewerId === c.id && d.typed < current.text.length ? "speaking" : "idle"] as [string, PuppetState]),
   );
 
-  return (
-    <Boardroom board={view.board} states={states} onPick={onPick}>
-      <StageLayout
-        video={<Player variant="stage" seekRequest={seekRequest} onTime={onTime} />}
-        caption={
-        <div className="cutout px-4 py-3.5 sm:px-5">
-          {turn && speaker ? (
-            <div className="flex gap-3">
-              <Avatar card={speaker} size={40} />
-              <div className="min-w-0 flex-1">
-                <p className="text-sm">
-                  <span className="font-extrabold text-ink">{speaker.name}</span>
-                  {other && turn.stance !== "opens" && turn.stance !== "closes" && (
-                    <span className="font-semibold text-ink-soft">
-                      {" "}
-                      {turn.stance === "agrees" ? "agrees with" : turn.stance === "disagrees" ? "pushes back on" : "builds on"} {other.name.split(" ")[0]}
-                    </span>
-                  )}
-                </p>
-                <p className="mt-1 min-h-[3em] leading-relaxed text-ink">
-                  {d.playing ? turn.text.slice(0, d.typed) : turn.text}
-                </p>
-                {turn.evidenceIds.length > 0 && (!d.playing || d.typed >= turn.text.length) && <TimeChip ids={turn.evidenceIds} className="mt-1.5" />}
-              </div>
-            </div>
-          ) : (
-            <div className="py-1 text-center">
-              <p className="font-bold text-ink">That&apos;s the panel&apos;s take.</p>
-              <button onClick={onOpenPlan} className="mt-2 rounded-full bg-accent px-5 py-2 text-sm font-bold text-accent-ink">
-                See your revision plan
-              </button>
-            </div>
-          )}
+  // Keep the line being spoken in view inside the panel (the page itself never scrolls).
+  useEffect(() => {
+    const list = listRef.current;
+    const el = list?.querySelector<HTMLElement>(`[data-turn="${d.idx}"]`);
+    if (list && el) list.scrollTo({ top: el.offsetTop - list.offsetTop - 8, behavior: "smooth" });
+  }, [d.idx, d.typed]);
 
-          <div className="mt-3 flex items-center justify-center gap-2 border-t border-line pt-3">
+  const shown = turns.slice(0, Math.min(turns.length, d.idx + 1));
+
+  return (
+    <BoardLayout
+      states={states}
+      onPick={onPick}
+      video={video}
+      panel={
+        <div className="cutout flex h-full max-h-[70vh] flex-col overflow-hidden lg:max-h-none">
+          <ol ref={listRef} className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 pt-4 pb-2 sm:px-5" aria-live="polite">
+            {shown.map((t, i) => {
+              const c = card(t.reviewerId);
+              if (!c) return null;
+              const other = t.respondsTo ? card(t.respondsTo) : null;
+              const live = i === d.idx && !d.ended;
+              const text = live && d.playing ? t.text.slice(0, d.typed) : t.text;
+              return (
+                <li key={i} data-turn={i} className={`flex gap-3 transition-opacity ${live ? "opacity-100" : "opacity-60"}`}>
+                  <Avatar card={c} size={38} state={live && d.playing && d.typed < t.text.length ? "speaking" : "idle"} />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm">
+                      <span className="font-extrabold text-ink">{c.name}</span>
+                      {other && t.stance !== "opens" && t.stance !== "closes" && (
+                        <span className="font-semibold text-ink-soft">
+                          {" "}
+                          {t.stance === "agrees" ? "agrees with" : t.stance === "disagrees" ? "pushes back on" : "builds on"} {other.name.split(" ")[0]}
+                        </span>
+                      )}
+                    </p>
+                    <p className="mt-0.5 leading-relaxed text-ink">{text}</p>
+                    {t.evidenceIds.length > 0 && (!live || !d.playing || d.typed >= t.text.length) && <TimeChip ids={t.evidenceIds} className="mt-1" />}
+                  </div>
+                </li>
+              );
+            })}
+            {d.ended && (
+              <li className="py-2 text-center">
+                <p className="font-bold text-ink">That&apos;s the panel&apos;s take.</p>
+                <button onClick={onOpenPlan} className="mt-2 rounded-full bg-accent px-5 py-2 text-sm font-bold text-accent-ink">
+                  See your revision plan
+                </button>
+              </li>
+            )}
+          </ol>
+
+          <div className="flex items-center justify-center gap-2 border-t border-line px-4 py-2.5">
             <button onClick={d.prev} disabled={d.idx === 0} aria-label="Previous point" className="grid h-9 w-9 place-items-center rounded-full text-ink-soft hover:bg-paper-deep hover:text-ink disabled:opacity-30">
               <Prev className="h-4 w-4" />
             </button>
@@ -235,8 +249,7 @@ function ReadyBoard({
             </span>
           </div>
         </div>
-        }
-      />
-    </Boardroom>
+      }
+    />
   );
 }

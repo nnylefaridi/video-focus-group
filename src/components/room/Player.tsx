@@ -18,12 +18,15 @@ export function Player({
   onTime,
   markers = [],
   onMarker,
+  fill = false,
 }: {
   variant: "stage" | "compact";
   seekRequest: { t: number; n: number } | null;
   onTime: (t: number) => void;
   markers?: Marker[];
   onMarker?: (m: Marker) => void;
+  /** Fill the height of its slot on large screens (the board screen's bottom row). */
+  fill?: boolean;
 }) {
   const { view, seek, currentTime } = useRoom();
   const ref = useRef<HTMLVideoElement>(null);
@@ -40,6 +43,37 @@ export function Player({
   }, [seekRequest]);
 
   const duration = v?.durationSec ?? 0;
+
+  if (fill) {
+    return (
+      <div
+        className="mx-auto w-full max-w-[min(100%,var(--phone-w))] lg:h-full lg:w-auto lg:max-w-[56vw]"
+        style={{ aspectRatio: `${aspect}`, ["--phone-w" as string]: `calc(40vh * ${aspect})` }}
+      >
+        <div className="h-full w-full rounded-[1.1rem] bg-white p-[6px] shadow-lift ring-1 ring-black/5">
+          {v?.url ? (
+            <video
+              ref={ref}
+              src={v.url}
+              poster={v.poster ?? undefined}
+              controls
+              playsInline
+              preload="metadata"
+              onLoadedMetadata={(e) => {
+                if (startAt.current > 0) e.currentTarget.currentTime = startAt.current;
+              }}
+              onTimeUpdate={(e) => onTime(e.currentTarget.currentTime)}
+              className="block h-full w-full rounded-[0.8rem] bg-ink object-contain"
+            >
+              {v.captions && <track kind="captions" src={v.captions} srcLang="en" label="English" />}
+            </video>
+          ) : (
+            <div className="grid h-full w-full place-items-center rounded-[0.8rem] bg-paper-deep text-sm text-ink-soft">Preparing your video…</div>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto" style={{ width: `min(100%, calc(${maxH} * ${aspect}))` }}>

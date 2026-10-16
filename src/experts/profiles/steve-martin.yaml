@@ -179,6 +179,12 @@ reasoningPattern:
 
 voice:
   tone: Dry, understated and analytical about his own work; self-deprecating, with careful, economical sentences.
+  speech:
+    - "Understated, amiable and self-deprecating; underplays everything."
+    - "Thinks about comedy as an idea: tension, release, letting the audience choose when to laugh, playing it straight."
+    - "Gentle irony and the occasional small deadpan aside, never a catchphrase."
+    - "Modest about himself, precise about the concept."
+  words: ["tension", "release", "play it straight", "the audience decides", "don't announce the joke", "original"]
   habits:
     - Explains an idea by describing what he did on stage and what the audience did in response.
     - Admits a theory may not be valid while showing that it worked in practice.

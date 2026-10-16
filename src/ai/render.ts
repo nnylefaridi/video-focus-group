@@ -135,7 +135,9 @@ ${p.reasoningPattern.map((q, i) => `${i + 1}. ${q}`).join("\n")}
 
 HOW THEY TALK:
 Tone: ${p.voice.tone}
+${p.voice.speech.map((s) => `- ${s}`).join("\n")}
 Habits: ${p.voice.habits.join("; ")}
+Words they lean on (use one or two naturally, never as a catchphrase or a quote): ${p.voice.words.join(", ")}
 Never: ${p.voice.avoid.join("; ")}
 
 OUTSIDE THEIR LANE:

@@ -161,6 +161,11 @@ reasoningPattern:
 
 voice:
   tone: Calm, earnest and optimistic; explains through simple models and stories and draws the larger lesson about people.
+  speech:
+    - "Calm, measured and earnest, with room between thoughts."
+    - "Asks why questions, then moves from the specific moment to a bigger point about people and trust."
+    - "Simple language and short stories; optimistic."
+  words: ["why", "belief", "trust", "inspire", "what you stand for", "people"]
   habits:
     - Uses a simple model (the circle) and returns to it.
     - Illustrates with historical or well-known brand stories.

@@ -16,6 +16,7 @@ import { deriveSpan } from "../src/core/evidence";
 import { getProfile } from "../src/experts/load";
 
 const PREDICTION = /\b(go(es|ing)? viral|guarantee[ds]?\b|will (definitely|certainly|surely) (sell|convert|perform|blow up)|(million|thousand)s? of views)/i;
+const AI_ISM = /\b(great question|it's worth noting|additionally|furthermore|in conclusion|let's dive|i'd recommend|leverage|crucial|key takeaway|elevate|compelling|resonate)\b/i;
 const GENERIC = /\b(know your audience|make it (more )?engaging|be (more )?authentic|add (more )?value|engage your audience|high[- ]quality content|tell a story|be consistent)\b/i;
 
 const ids = process.argv.slice(2);
@@ -42,7 +43,7 @@ const jaccard = (a: Set<string>, b: Set<string>) => {
 };
 const pct = (n: number, d: number) => (d ? `${Math.round((n / d) * 100)}%` : "–");
 
-type Row = { review: string; reviewer: string; obs: number; recs: number; cited: string; documented: string; general: string; dropped: number; generic: number; predictions: number };
+type Row = { review: string; reviewer: string; obs: number; recs: number; cited: string; documented: string; general: string; dropped: number; generic: number; aiisms: number; predictions: number };
 const rows: Row[] = [];
 const overlaps: string[] = [];
 let found = 0;
@@ -65,6 +66,7 @@ for (const r of reviews) {
       general: pct(items.filter((x) => x.basis === "general").length, items.length),
       dropped: r.validation?.[rid]?.dropped.length ?? 0,
       generic: texts.filter((t) => GENERIC.test(t)).length,
+      aiisms: texts.filter((t) => AI_ISM.test(t)).length + (r.discussion ?? []).filter((t) => t.reviewerId === rid && AI_ISM.test(t.text)).length,
       predictions: texts.filter((t) => PREDICTION.test(t)).length,
     });
   }

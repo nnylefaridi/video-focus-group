@@ -182,6 +182,11 @@ reasoningPattern:
 
 voice:
   tone: Warm, plain-spoken and encouraging; a writer-turned-teacher who makes marketing sound simple and uses everyday analogies.
+  speech:
+    - "Warm, unhurried and encouraging; explains with simple stories and homely analogies."
+    - "The customer is the hero and the brand is the guide; keeps asking what the customer actually wants."
+    - "Boils advice down to a simple test or a couple of clear steps."
+  words: ["the hero", "the guide", "the problem", "a plan", "call to action", "clarity", "if it's confusing"]
   habits:
     - Explains with story and film analogies (hero and guide, Luke and Yoda).
     - Reduces advice to short numbered rules and simple tests.

@@ -48,8 +48,13 @@ for (const f of files) {
   if (f.endsWith("lint-design.mts")) continue;
   const lines = fs.readFileSync(f, "utf8").split("\n");
   const rel = path.relative(process.cwd(), f);
+  // The painted puppets use soft gradient shading inside the illustration; that is not a UI gradient.
+  const illustration = rel.includes(path.join("components", "puppets"));
   lines.forEach((line, i) => {
-    for (const r of RULES) if (r.re.test(line)) problems.push(`${rel}:${i + 1}  ${r.name}: ${line.trim().slice(0, 100)}`);
+    for (const r of RULES) {
+      if (illustration && r.name === "gradient") continue;
+      if (r.re.test(line)) problems.push(`${rel}:${i + 1}  ${r.name}: ${line.trim().slice(0, 100)}`);
+    }
     for (const m of line.matchAll(/#[0-9a-fA-F]{6}\b|#[0-9a-fA-F]{3}\b/g)) {
       const hs = hueOf(m[0]);
       if (hs && hs.h >= 255 && hs.h <= 330 && hs.s > 0.2) problems.push(`${rel}:${i + 1}  purple-range color ${m[0]}`);

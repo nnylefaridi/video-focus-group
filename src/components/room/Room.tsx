@@ -203,7 +203,7 @@ export function Room({ id }: { id: string }) {
     <RoomContext.Provider value={ctx}>
       <div className="min-h-dvh lg:pr-[248px]">
         {section === "board" && (
-          <main className="mx-auto max-w-[1180px] px-2 pt-6 pb-8 sm:px-6 lg:pt-10">
+          <main className="mx-auto max-w-[1180px] px-2 pt-6 pb-8 sm:px-6 lg:h-dvh lg:pt-3 lg:pb-4">
             <h1 className="sr-only">{view.title}</h1>
             <BoardView
               seekRequest={seekRequest}
@@ -270,7 +270,7 @@ export function Room({ id }: { id: string }) {
             </main>,
           )}
 
-        <p className="mx-auto max-w-xl px-6 pb-6 text-center text-xs font-semibold text-ink-faint">
+        <p className={`mx-auto max-w-xl px-6 pb-6 text-center text-xs font-semibold text-ink-faint ${section === "board" ? "lg:hidden" : ""}`}>
           Reviewers are AI interpretations based on each person&apos;s published work. They did not watch or endorse this video.
         </p>
         <div className="mx-auto max-w-md px-6 pb-28 text-center lg:hidden">{extras}</div>
@@ -282,6 +282,11 @@ export function Room({ id }: { id: string }) {
           {navButtons(false)}
         </nav>
         <div className="px-3">{extras}</div>
+        {section === "board" && (
+          <p className="px-3 text-[0.7rem] leading-snug font-semibold text-ink-faint">
+            Reviewers are AI interpretations based on each person&apos;s published work. They did not watch or endorse this video.
+          </p>
+        )}
       </aside>
 
       {/* Phones and tablets: a paper tab bar along the bottom. */}
