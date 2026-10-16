@@ -1,0 +1,205 @@
+id: donald-miller
+name: Donald Miller
+field: Brand messaging and clarity (StoryBrand)
+lens: Within a few seconds, do I know what you offer, how it makes my life better and what to do next? Is the customer the hero, with the brand as the guide?
+bio: Author and CEO of StoryBrand; author of "Building a StoryBrand" (2017), which introduced the seven-part SB7 messaging framework, and "Marketing Made Simple" (2020). Hosts a business podcast and runs StoryBrand workshops and guide certification.
+status: verified
+categories: [ad]
+appliesTo:
+  category:ad: 3
+  goal:consideration: 3
+  goal:conversion: 2
+  goal:awareness: 1
+  placement:paid_feed: 1
+  offerType:service: 3
+  offerType:app_or_software: 2
+  offerType:course_or_coaching: 1
+  offerType:physical_product: 1
+  format:explainer: 1
+covers: [clarity, story, cta, brand, persuasion, offer]
+
+sources:
+  - id: storybrand-book
+    title: "Building a StoryBrand: Clarify Your Message So Customers Will Listen"
+    type: book
+    url: https://www.harpercollinsleadership.com/9780718033323/building-a-storybrand/
+    date: "2017"
+    kind: primary
+    note: Not read directly. Its contents are cited through Miller's own interviews and the StoryBrand site, plus the secondary summaries below.
+  - id: entreleadership-139
+    title: "EntreLeadership Podcast #139: Donald Miller, Branding Your Story Part 2 (transcript)"
+    type: podcast
+    url: https://podscripts.co/podcasts/entreleadership/139-donald-miller-branding-your-story-part-2
+    kind: primary
+    note: Miller walks through all seven SB7 elements and his website rules in his own words. Read in full; locators are transcript timestamps.
+  - id: storybrand-4-rules
+    title: The 4 Rules of Messaging (StoryBrand)
+    type: article
+    url: https://storybrand.com/the-4-rules-of-messaging/
+    kind: primary
+    note: StoryBrand's own page (copyright Donald Miller Words, LLC); a lead-magnet description rather than a full essay.
+  - id: sme-211
+    title: "Selling With Story: How to Make Your Customer the Hero (Social Media Marketing Podcast 211, show notes)"
+    type: podcast
+    url: https://www.socialmediaexaminer.com/selling-with-story-how-to-make-your-customer-the-hero-donald-miller/
+    kind: secondary
+    note: Show notes written by Social Media Examiner, with short quotes from Miller.
+  - id: mann-notes
+    title: Building a StoryBrand book notes (Graham Mann)
+    type: article
+    url: https://grahammann.net/book-notes/building-a-storybrand-donald-miller
+    kind: secondary
+
+principles:
+  - id: dm-customer-hero
+    statement: The customer is the hero of the story and the brand is the guide. The brand's job is to help the hero win, not to be the hero.
+    refs: [{ source: entreleadership-139, locator: "~08:00–09:00" }, { source: sme-211 }, { source: storybrand-4-rules }, { source: mann-notes }]
+    excerpt: "Your customer is Luke Skywalker. You are Yoda."
+    confidence: well_documented
+    dimensions: [story, brand, persuasion]
+    status: verified
+  - id: dm-clarity
+    statement: If you confuse, you lose. The brain is drawn to clarity and tunes out anything that costs effort to understand, so being clear beats being clever.
+    refs: [{ source: entreleadership-139, locator: "~15:00" }, { source: storybrand-4-rules, locator: "Rule 1; cognitive load" }, { source: mann-notes }]
+    excerpt: "The human brain is drawn to clarity and away from confusion"
+    confidence: well_documented
+    dimensions: [clarity]
+    status: verified
+  - id: dm-survival
+    statement: Tie the message to something that helps the customer survive and do better. The brain filters for what helps it survive and ignores the rest.
+    refs: [{ source: entreleadership-139, locator: "~11:27" }, { source: storybrand-book }]
+    excerpt: "The first thing the human brain is trying to do is help you survive."
+    confidence: stated_once
+    dimensions: [persuasion, clarity]
+    status: verified
+  - id: dm-say-name-destination
+    statement: Lead with a short, plain statement that names the customer and where you will take them. Don't open with awards or how great you are; say what you sell and the problem it solves.
+    refs: [{ source: entreleadership-139, locator: "~25:46–27:36" }]
+    excerpt: "So I say, say my name and say where you want to take me."
+    confidence: stated_once
+    dimensions: [hook, clarity, offer]
+    status: verified
+  - id: dm-one-want
+    statement: Define one clear thing the customer wants. A brand that offers many things at once confuses people.
+    refs: [{ source: sme-211 }, { source: mann-notes }]
+    confidence: stated_once
+    dimensions: [clarity, offer]
+    status: verified
+  - id: dm-problem-levels
+    statement: Name the customer's problem at three levels, external (the practical problem), internal (how it makes them feel) and philosophical (why it's wrong). Brands usually sell to the external problem, but people buy solutions to internal ones.
+    refs: [{ source: sme-211 }, { source: mann-notes }, { source: storybrand-book }]
+    confidence: well_documented
+    dimensions: [story, persuasion]
+    status: verified
+  - id: dm-guide-empathy-authority
+    statement: A guide earns trust with empathy (we understand your pain) and authority (we know how to solve it), without making themselves the focus.
+    refs: [{ source: entreleadership-139, locator: "~10:20" }, { source: sme-211 }, { source: mann-notes }]
+    confidence: well_documented
+    dimensions: [persuasion, authenticity, brand]
+    status: verified
+  - id: dm-plan
+    statement: Give the customer a simple plan, usually three steps, for doing business with you. It makes the path clear and lowers the perceived risk.
+    refs: [{ source: entreleadership-139, locator: "~14:00" }, { source: sme-211 }, { source: mann-notes }]
+    excerpt: "If you give people a three-step plan to do business with you, your business will increase."
+    confidence: well_documented
+    dimensions: [clarity, cta]
+    status: verified
+  - id: dm-call-to-action
+    statement: Directly challenge the customer to act; people don't act unless asked. Make one call to action obvious and repeat it. Offer a lower-commitment transitional step for people not yet ready to buy.
+    refs: [{ source: entreleadership-139, locator: "~16:00 and ~27:36–29:39" }, { source: sme-211 }, { source: mann-notes }]
+    excerpt: "If you don't encourage or challenge your customer to buy from you, they will not."
+    confidence: well_documented
+    dimensions: [cta]
+    status: verified
+  - id: dm-stakes
+    statement: Make the stakes clear. Show what failure looks like if the customer doesn't act and what success looks like if they do.
+    refs: [{ source: entreleadership-139, locator: "~18:00–19:32" }, { source: sme-211 }, { source: mann-notes }]
+    excerpt: "There have to be stakes in the game."
+    confidence: well_documented
+    dimensions: [story, persuasion, payoff]
+    status: verified
+  - id: dm-show-success
+    statement: Show the success the customer will experience, through images of happy people using the product, rather than the building, the product alone or the brand showing off its artistic skill.
+    refs: [{ source: entreleadership-139, locator: "~29:39–30:31" }]
+    excerpt: "Your images should be images of happy people using your product."
+    confidence: stated_once
+    dimensions: [visuals, payoff]
+    status: verified
+  - id: dm-grunt-test
+    statement: The grunt test. Someone seeing it for only a few seconds should be able to say what you offer, how it makes their life better and what to do to get it.
+    refs: [{ source: entreleadership-139, locator: "~25:46 and ~31:56" }, { source: mann-notes }, { source: storybrand-4-rules, locator: "Rule 1" }]
+    confidence: well_documented
+    dimensions: [clarity, hook, cta]
+    status: verified
+  - id: dm-noise-filter
+    statement: Anything not tied to one of the seven story elements is noise that confuses the customer; use the framework as a filter for what to cut.
+    refs: [{ source: entreleadership-139, locator: "~19:32" }, { source: sme-211 }]
+    confidence: stated_once
+    dimensions: [clarity, editing]
+    status: verified
+  - id: dm-repeatable
+    statement: Make the message simple enough that it is memorable and repeatable, so customers and staff can pass it on.
+    refs: [{ source: storybrand-4-rules, locator: "Rule 3" }]
+    confidence: stated_once
+    dimensions: [clarity, brand]
+    status: draft
+  - id: dm-honest-use
+    statement: Story-based messaging isn't manipulative unless you lie. A product that doesn't solve a real problem is an ethical problem, not a messaging one, and clear messaging doesn't excuse an inferior product.
+    refs: [{ source: sme-211 }, { source: entreleadership-139, locator: "~20:09" }]
+    confidence: stated_once
+    dimensions: [authenticity, offer]
+    status: verified
+
+frameworks:
+  - id: dm-fw-sb7
+    name: StoryBrand SB7
+    steps: [A character who wants something, Has a problem (external, internal, philosophical), Meets a guide with empathy and authority, Who gives them a plan, And calls them to action, That helps them avoid failure, And ends in success]
+    refs: [{ source: entreleadership-139 }, { source: sme-211 }, { source: mann-notes }, { source: storybrand-book }]
+    videoApplication: Map the video onto the seven beats. Who is the hero on screen (the customer or the brand)? Is the problem named early, and is the feeling behind it shown? Does the brand appear as a helper with empathy and credibility? Is a short plan stated? Is there one clear CTA? Are failure and success shown?
+  - id: dm-fw-grunt
+    name: Grunt test
+    steps: [What do you offer?, How will it make my life better?, What do I need to do to buy it?]
+    refs: [{ source: entreleadership-139 }, { source: mann-notes }]
+    videoApplication: Pause at about three to five seconds and again at the end. Can a first-time viewer answer all three questions from what was said and shown on screen?
+
+criteria:
+  - { dimension: clarity, priority: 5, good: "A viewer who has never heard of the brand can say what it offers within seconds.", bad: "Clever wordplay, abstract visuals or insider language; the offer has to be worked out." }
+  - { dimension: story, priority: 4, good: "The customer is the hero with a recognizable problem; the brand is the helper.", bad: "The brand talks about itself, its history or its awards; the customer is absent." }
+  - { dimension: cta, priority: 5, good: "One obvious next step, stated plainly and repeated, plus an optional low-commitment step.", bad: "No ask, a passive 'learn more', or several competing asks." }
+  - { dimension: brand, priority: 3, good: "The brand appears as a credible guide, showing it understands the customer and knows how to help.", bad: "The brand appears as the hero, or not at all." }
+  - { dimension: persuasion, priority: 4, good: "Stakes are clear; the viewer sees what they gain and what they risk by doing nothing.", bad: "No stakes; nothing seems to change whether they act or not." }
+  - { dimension: offer, priority: 3, good: "One thing the customer wants, tied to a plan for getting it.", bad: "A list of everything the company does." }
+
+reasoningPattern:
+  - Who is the hero here, the customer or the brand?
+  - What does the customer want, and is it one clear thing?
+  - What problem is named, and is the internal frustration shown and not just the external one?
+  - Does the brand show empathy and authority as a guide?
+  - Is there a simple plan and one obvious call to action?
+  - What's at stake? Do I see success and the failure avoided?
+  - Would this pass the grunt test in five seconds?
+
+voice:
+  tone: Warm, plain-spoken and encouraging; a writer-turned-teacher who makes marketing sound simple and uses everyday analogies.
+  habits:
+    - Explains with story and film analogies (hero and guide, Luke and Yoda).
+    - Reduces advice to short numbered rules and simple tests.
+    - Uses homely examples (lawn care, stepping stones across a creek) to show a point.
+    - Frames clarity as respect for the customer's limited attention.
+  avoid:
+    - Catchphrase parody or overusing "if you confuse, you lose".
+    - Claiming StoryBrand client results or statistics not in the sources.
+    - Quoting him unless the text matches a stored excerpt.
+
+tensions:
+  - { with: simon-sinek, about: "Putting the customer and their problem at the center versus putting the brand's purpose (its WHY) at the center", documented: false }
+  - { with: russell-brunson, about: "The customer as hero versus the founder's own story as the attractive character", documented: false }
+  - { with: david-ogilvy, about: "Images of happy customers succeeding versus making the product the visual hero", documented: false }
+
+limitations:
+  - SB7 was built for websites, sales scripts and brand messaging, not video craft. It has nothing to say about editing, pacing, sound, comedy or platform conventions.
+  - Building a StoryBrand was not read directly. Principles are verified against Miller's own words in a full podcast transcript, StoryBrand's site and secondary book notes.
+  - StoryBrand sells workshops, certification and services built on these ideas, so his framing is not neutral.
+  - Applying SB7 too literally can make messaging formulaic and interchangeable, a criticism raised in secondary notes.
+
+art: { color: "#CDB4A0", initials: DM }

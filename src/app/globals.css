@@ -1,0 +1,79 @@
+@import "tailwindcss";
+
+/*
+  Design tokens: warm paper, soft ink, one restrained accent.
+  Visual bans are enforced by `npm run lint:design` (scripts/lint-design.mts).
+*/
+:root {
+  color-scheme: light;
+  --paper: #f6f1e7;
+  --paper-deep: #eee6d6;
+  --card: #fbf8f2;
+  --ink: #2b2722;
+  --ink-soft: #5b544a;
+  --ink-faint: #8a8173;
+  --line: #e3d9c6;
+  --line-strong: #cfc2aa;
+  --accent: #3e6a56;
+  --accent-ink: #fbf8f2;
+  --accent-soft: #dfe8de;
+  --warn: #9c4f2c;
+  --warn-soft: #f4e2d6;
+  --focus: #3e6a56;
+  --shadow: 0 1px 2px rgb(60 48 30 / 0.06), 0 6px 18px -8px rgb(60 48 30 / 0.12);
+}
+
+@theme inline {
+  --color-paper: var(--paper);
+  --color-paper-deep: var(--paper-deep);
+  --color-card: var(--card);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-ink-faint: var(--ink-faint);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-accent-soft: var(--accent-soft);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
+  --font-serif: var(--font-fraunces);
+  --font-sans: var(--font-figtree);
+  --shadow-soft: var(--shadow);
+  --radius-xl: 1.25rem;
+  --radius-2xl: 1.5rem;
+}
+
+html,
+body {
+  background: var(--paper);
+  color: var(--ink);
+}
+
+body {
+  font-family: var(--font-figtree), ui-sans-serif, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: var(--accent-soft);
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 3px;
+  border-radius: 0.5rem;
+}
+
+.font-serif {
+  font-variation-settings: "SOFT" 60, "WONK" 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

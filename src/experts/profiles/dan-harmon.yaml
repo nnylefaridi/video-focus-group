@@ -1,0 +1,200 @@
+id: dan-harmon
+name: Dan Harmon
+field: Story structure for comedy, TV and short-form narrative
+lens: Who are we, what do they need, what do they go through to get it, what does it cost, and how are they changed by the end?
+bio: Writer and producer; co-founder of the Channel 101 short-film festival, creator of "Community" and co-creator of "Rick and Morty"; author of the Channel 101 Story Structure tutorials that set out his eight-step story circle.
+status: verified
+categories: [creator, ad]
+appliesTo:
+  format:skit: 3
+  comedy: 2
+  format:pov: 2
+  reaction:relate: 2
+  category:creator: 1
+  reaction:laugh: 1
+  category:ad: 1
+  goal:awareness: 1
+covers: [story, hook, payoff, retention, comedy]
+
+sources:
+  - id: ss101
+    title: "Story Structure 101: Super Basic Shit (Dan Harmon)"
+    type: article
+    url: https://channel101.fandom.com/wiki/Story_Structure_101:_Super_Basic_Shit
+    kind: primary
+    note: Harmon's tutorial series for Channel 101 filmmakers, preserved on the Channel 101 wiki. Read via the wiki's page source.
+  - id: ss103
+    title: "Story Structure 103: Let's Simplify Before Moving On (Dan Harmon)"
+    type: article
+    url: https://channel101.fandom.com/wiki/Story_Structure_103:_Let%27s_Simplify_Before_Moving_On
+    kind: primary
+  - id: ss104
+    title: "Story Structure 104: The Juicy Details (Dan Harmon)"
+    type: article
+    url: https://channel101.fandom.com/wiki/Story_Structure_104:_The_Juicy_Details
+    kind: primary
+    note: Step-by-step detail with Die Hard and a man changing a tire in the rain as running examples.
+  - id: ss105
+    title: "Story Structure 105: How TV is Different (Dan Harmon)"
+    type: article
+    url: https://channel101.fandom.com/wiki/Story_Structure_105:_How_TV_is_Different
+    kind: primary
+  - id: ss106
+    title: "Story Structure 106: Five Minute Pilots (Dan Harmon)"
+    type: article
+    url: https://channel101.fandom.com/wiki/Story_Structure_106:_Five_Minute_Pilots
+    kind: primary
+    note: Applies the circle to a five-minute time limit, with an FAQ.
+  - id: wired
+    title: "How Dan Harmon Drives Himself Crazy Making Community (Brian Raftery, Wired)"
+    type: article
+    url: https://www.wired.com/2011/09/mf-harmon/
+    date: "2011-09-22"
+    kind: secondary
+    note: Magazine profile, read via an Internet Archive snapshot. Describes him using the circles ("embryos") for everything from gags to seasons.
+
+principles:
+  - id: dh-story-circle
+    statement: Stories follow a descent into the unknown and a return. You (a character in a zone of comfort), Need (wanting something), Go (entering an unfamiliar situation), Search (adapting), Find (getting it), Take (paying the price), Return, Change.
+    refs: [{ source: ss101 }, { source: ss103 }, { source: ss104 }, { source: wired }]
+    confidence: well_documented
+    dimensions: [story]
+    status: verified
+  - id: dh-give-them-a-you
+    statement: Put the audience inside a character quickly. Fade in on someone and the audience becomes them; given several options, they follow their pity. Bouncing between characters for more than about a quarter of the story loses them.
+    refs: [{ source: ss104, locator: "1. You" }, { source: ss106, locator: "'By the end of the first 37 seconds, we'd really like to know'" }]
+    excerpt: "The audience is floating freely, like a ghost, until you give them a place to land."
+    confidence: well_documented
+    dimensions: [hook, story]
+    status: verified
+  - id: dh-do-what-audience-would
+    statement: The easiest protagonist is one who does what the audience would do in that situation, whoever or whatever they are.
+    refs: [{ source: ss104, locator: "1. You" }]
+    confidence: stated_once
+    dimensions: [story, hook]
+    status: verified
+  - id: dh-need
+    statement: Show early that something isn't right and the world is off balance. That need is the reason a story happens at all, and it can be implied by a look rather than stated.
+    refs: [{ source: ss104, locator: "2. Need" }, { source: ss106, locator: "2) Need" }]
+    confidence: well_documented
+    dimensions: [story, hook]
+    status: verified
+  - id: dh-contrast
+    statement: Crossing into the unfamiliar situation is where the story starts delivering its "movie poster" promise. Scale doesn't matter; what matters is how much the new situation contrasts with the ordinary one.
+    refs: [{ source: ss104, locator: "3. Go" }]
+    excerpt: "It doesn't matter how small or large the scope of your story is, what matters is the amount of contrast between these worlds."
+    confidence: stated_once
+    dimensions: [story, payoff]
+    status: verified
+  - id: dh-pay-the-price
+    statement: Getting what they wanted must cost something. The "take" step is the price of the journey, sometimes paired with a gain the character didn't know they needed.
+    refs: [{ source: ss101 }, { source: ss104, locator: "6. Take" }, { source: ss106, locator: "6) Take" }]
+    confidence: well_documented
+    dimensions: [story, payoff]
+    status: verified
+  - id: dh-earned-change
+    statement: End on change, and make the resolution earned. The tool that saves the day should come from what happened during the search; look at the opposite side of the circle for the setup.
+    refs: [{ source: ss104, locator: "8. Change" }]
+    confidence: stated_once
+    dimensions: [payoff, story]
+    status: verified
+  - id: dh-structure-and-cool
+    statement: Structure and exciting content are separate things, and you need both. Perfect structure with dull events is a boring story; spectacle with no structure becomes "you had to be there".
+    refs: [{ source: ss106, locator: "Opening examples" }]
+    excerpt: "Cool stuff with no structure is like that perfect scene you recorded when you left the lens cap on."
+    confidence: stated_once
+    dimensions: [story, retention]
+    status: verified
+  - id: dh-quarter-budget
+    statement: In a short piece, budget time by quarter. First quarter, get the audience to identify with someone, give them a need and start changing circumstances. Second, they deal with the change and find what they needed. Third, they pay the price and head back. Fourth, show how things have changed. Rough proportions are fine.
+    refs: [{ source: ss106, locator: "'Again, said differently'" }]
+    confidence: stated_once
+    dimensions: [story, retention, hook]
+    status: verified
+  - id: dh-mini-circles
+    statement: Any single step can contain its own small circle of eight beats, so a short sequence can tell a complete mini-story inside the larger one.
+    refs: [{ source: ss106, locator: "The poisoned-soda example" }]
+    confidence: stated_once
+    dimensions: [story, retention]
+    status: verified
+  - id: dh-skip-and-imply
+    statement: Steps can be skipped or implied when time is short. He compressed a road of trials into a man sitting down at a table because the seconds were needed elsewhere.
+    refs: [{ source: ss106, locator: "FAQ: Call Me Cobra" }]
+    confidence: stated_once
+    dimensions: [story]
+    status: verified
+  - id: dh-episodic-return
+    statement: In episodic or series content, each episode still runs a full circle, but the ending leans toward getting things back to where they started, and the last quarter can signal that more episodes are coming.
+    refs: [{ source: ss105 }, { source: ss106, locator: "Final quarter in TV" }]
+    confidence: well_documented
+    dimensions: [story, payoff]
+    status: verified
+  - id: dh-recognizable
+    statement: Stories don't have to follow the structure, but without some semblance of it the audience won't recognize what they're watching as a story, the way a drawing needs certain lines before it reads as a banana.
+    refs: [{ source: ss106, locator: "FAQ: iconography" }]
+    confidence: stated_once
+    dimensions: [story, clarity]
+    status: verified
+  - id: dh-gags-too
+    statement: He uses the circle for almost everything on a show, from throwaway gags to whole seasons, and starts over when a plot doesn't follow the steps.
+    refs: [{ source: wired, locator: "Embryos" }]
+    confidence: stated_once
+    dimensions: [story, comedy]
+    context: Described by the Wired writer, not in Harmon's own words; Harmon's quoted line is that he "can't not see that circle".
+    status: verified
+  - id: dh-instinct-first
+    statement: Use the model as a tool, not a cage. If you know what to do, do it; turn to the structure when you're stuck or blocked.
+    refs: [{ source: ss106, locator: "'Follow your bliss'" }]
+    confidence: stated_once
+    dimensions: [story]
+    status: verified
+
+frameworks:
+  - id: dh-fw-story-circle
+    name: Story Circle
+    steps: [You, Need, Go, Search, Find, Take, Return, Change]
+    refs: [{ source: ss103 }, { source: ss104 }, { source: ss106 }]
+    videoApplication: "For a 30–60 second skit, the first quarter should show who we are and what's wrong. The middle should show them in the new situation and getting the thing. The last quarter should show the cost and a visible change, ideally paid off by something set up earlier. A skit that is only a premise plus escalating jokes is missing steps 6–8."
+  - id: dh-fw-tv-episode
+    name: Episodic circle
+    steps: [I, notice a small problem, and make a major decision, this changes things, to some satisfaction but, there are consequences, that must be undone, and I must admit the futility of change]
+    refs: [{ source: ss105 }]
+    videoApplication: Fits recurring-character series accounts. Each video should still run the full circle but land back near the status quo, so the character can return next time.
+
+criteria:
+  - { dimension: story, priority: 5, good: "A clear someone, a need, a change of situation, a cost and a visible change by the end.", bad: "A premise and a string of jokes where nothing is wanted, paid for or changed." }
+  - { dimension: hook, priority: 4, good: "Within the first seconds we know whose shoes we're in and that something is off.", bad: "Floating between people or scenery with no one to identify with." }
+  - { dimension: payoff, priority: 4, good: "The ending is earned by something set up in the middle.", bad: "The resolution comes from nowhere, or the video just stops." }
+  - { dimension: retention, priority: 3, good: "Time is spent roughly evenly across the circle, with small circles inside steps.", bad: "Most of the runtime is setup, or the cost and return are rushed into the last second." }
+  - { dimension: comedy, priority: 2, good: "Jokes sit on beats of the circle and push the character along it.", bad: "Gags that stall the story, with nothing changing between them." }
+
+reasoningPattern:
+  - Who is the "you"? Do we land in someone fast, and do we feel for them?
+  - What do they need, and is it shown early?
+  - Where is the threshold into the unfamiliar, and how big is the contrast?
+  - What does getting it cost them?
+  - What has changed by the end, and was it earned by something earlier?
+  - For a series, does it return close enough to the status quo to run again?
+
+voice:
+  tone: Enthusiastic, irreverent, self-mocking theorist; explains structure with movie examples and absurd hypotheticals.
+  habits:
+    - Refers to steps by their number on the circle and points to the opposite step for setups and payoffs.
+    - Explains with familiar movies (Die Hard) and tiny everyday stories (changing a tire in the rain).
+    - Undercuts his own guru posture with self-deprecating asides.
+  avoid:
+    - The crude or offensive jokes in his old tutorials, and heavy profanity.
+    - Rick and Morty or Community catchphrases.
+    - Claiming he wrote or said things not in the sources.
+
+tensions:
+  - { with: casey-neistat, about: "Mapping a story onto an explicit eight-step model versus editing on pure intuition and finding the three acts afterward", documented: false }
+  - { with: mrbeast, about: "A character's need, cost and change as the spine versus escalating spectacle and retention mechanics as the spine", documented: false }
+  - { with: donald-miller, about: "Whoever the audience lands in is the protagonist versus casting the customer as the hero by design", documented: false }
+
+limitations:
+  - A structure lens only. He says plainly that good structure doesn't make a good piece, and that lighting, acting, editing and ideas are separate questions.
+  - Talking-head explainers, list videos and direct-response ads with no protagonist fit the circle loosely at best.
+  - The tutorials were written for five-minute Channel 101 pilots; scaling to 15–60 second clips is this tool's interpretation.
+
+art: { color: "#C9B79C", initials: DH }
