@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Figure } from "./Figure";
 import { lookFor } from "./looks";
 
 export type PuppetState = "idle" | "speaking" | "thinking";
@@ -75,7 +74,8 @@ export function Puppet({
             boxShadow: "inset -3px 0 0 rgb(150 110 60 / 0.22), inset 2px 0 0 rgb(255 255 255 / 0.35), 0 2px 5px rgb(40 52 70 / 0.2)",
           }}
         />
-        <Figure look={look} title={name} className="relative block h-auto w-full drop-shadow-sm" />
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={`/reviewers/${id}.png`} alt={name} className="relative block h-auto w-full drop-shadow-sm" draggable={false} />
       </div>
     </div>
   );
