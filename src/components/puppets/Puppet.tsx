@@ -66,13 +66,13 @@ export function Puppet({
         {/* the popsicle stick, behind the cutout */}
         <div
           aria-hidden
-          className="absolute left-1/2 -translate-x-1/2 rounded-b-full"
+          className="absolute left-1/2 -translate-x-1/2 rounded-full"
           style={{
-            top: "80%",
-            width: "7%",
-            height: `${stick * 100 + 20}%`,
+            top: "78%",
+            width: "8%",
+            height: `${stick * 100 + 24}%`,
             background: "var(--wood)",
-            boxShadow: "inset -2px 0 0 rgb(150 110 60 / 0.18), 0 2px 4px rgb(40 52 70 / 0.15)",
+            boxShadow: "inset -3px 0 0 rgb(150 110 60 / 0.22), inset 2px 0 0 rgb(255 255 255 / 0.35), 0 2px 5px rgb(40 52 70 / 0.2)",
           }}
         />
         <Figure look={look} title={name} className="relative block h-auto w-full drop-shadow-sm" />

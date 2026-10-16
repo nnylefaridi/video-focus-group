@@ -90,19 +90,27 @@ export function BoardStep({ answers, picks, roster, board, onChangeBoard, onEdit
       {others.length > 0 && board.length < MAX && (
         <div className="mt-8">
           <h3 className="text-sm font-bold text-ink-soft">Add someone else</h3>
-          <div className="mt-3 flex flex-wrap gap-2">
+          <ul className="mt-3 grid gap-2.5 sm:grid-cols-2">
             {others.map((c) => (
-              <button
-                key={c.id}
-                onClick={() => onChangeBoard([...board, c.id])}
-                className="cutout inline-flex items-center gap-2 rounded-full py-1 pr-4 pl-1 text-sm font-bold text-ink transition-all hover:-translate-y-0.5 hover:shadow-lift"
-              >
-                <Avatar card={c} size={30} />
-                {c.name}
-                <Plus className="h-3.5 w-3.5 text-ink-soft" />
-              </button>
+              <li key={c.id}>
+                <button
+                  onClick={() => onChangeBoard([...board, c.id])}
+                  aria-label={`Add ${c.name}, ${c.short}`}
+                  className="cutout group flex h-full w-full items-start gap-3 p-3 text-left transition-all hover:-translate-y-0.5 hover:shadow-lift"
+                >
+                  <Avatar card={c} size={42} />
+                  <span className="min-w-0 flex-1">
+                    <span className="flex items-center justify-between gap-2">
+                      <span className="font-extrabold text-ink">{c.name}</span>
+                      <Plus className="h-4 w-4 shrink-0 text-ink-faint transition-colors group-hover:text-accent" />
+                    </span>
+                    <span className="block text-xs font-bold text-accent">{c.short}</span>
+                    <span className="mt-1 block text-[0.82rem] leading-snug text-ink-soft">{c.field}</span>
+                  </span>
+                </button>
+              </li>
             ))}
-          </div>
+          </ul>
         </div>
       )}
 

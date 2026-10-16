@@ -283,3 +283,42 @@ export const QUESTIONS: QuestionNode[] = [
 ];
 
 export const QUESTION_BY_ID = new Map(QUESTIONS.map((q) => [q.id, q]));
+
+/** At most this many questions are ever shown, counting the first one. */
+export const MAX_QUESTIONS = 5;
+
+/**
+ * How useful a question is for this particular video, given what we already know.
+ * The flow always asks the most useful unanswered question next, so the five
+ * questions someone sees depend on their answers.
+ */
+export function priorityOf(id: string, f: IntentFields): number {
+  switch (id) {
+    case "what": return 100;
+    case "category": return 95;
+    // creator
+    case "format": return 80;
+    case "punchline": return 78;
+    case "takeaway": return 78;
+    case "story": return 74;
+    case "funny": return f.format === "skit" || f.format === "pov" ? 72 : 62;
+    case "reaction": return 60;
+    case "audience": return 56;
+    case "niche": return 50;
+    case "stage": return 20;
+    // ad
+    case "product": return 86;
+    case "offer": return f.goal === "awareness" ? 55 : 82;
+    case "goal": return 80;
+    case "action": return f.goal === "awareness" ? 50 : 76;
+    case "adAudience": return 66;
+    case "brand": return f.goal === "awareness" || f.goal === "consideration" ? 70 : 34;
+    case "price": return f.goal === "conversion" ? 52 : 28;
+    case "placement": return 44;
+    case "constraints": return 14;
+    // both
+    case "unsure": return 58;
+    case "platform": return 40;
+    default: return 0;
+  }
+}

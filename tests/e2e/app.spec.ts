@@ -12,7 +12,9 @@ test("the first screen is only the first question and its answer box", async ({ 
   // The only other control is the answer box's own send button.
   await expect(main.getByRole("button")).toHaveCount(1);
   await expect(main.getByRole("button", { name: "Continue" })).toBeDisabled();
-  await expect(page.getByRole("link")).toHaveCount(0);
+  // The only link on the page is the small Buy Me A Coffee tag in the corner.
+  await expect(page.getByRole("link")).toHaveCount(1);
+  await expect(page.getByRole("link", { name: "Buy me a coffee" })).toHaveAttribute("href", "https://buymeacoffee.com/nylefaridi");
   await expect(page.locator("header, footer, nav")).toHaveCount(0);
 });
 

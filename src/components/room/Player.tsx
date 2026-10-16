@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
-import { deriveSpan, formatTime, type Ledger } from "@/core/evidence";
+import { useEffect, useRef } from "react";
+import { formatTime } from "@/core/evidence";
 import { useRoom } from "./context";
 
-type Marker = { t: number; color: string; label: string; key: string };
+/** A dot on the timeline for one piece of feedback; `key` is the id of its note on the page. */
+export type Marker = { t: number; color: string; label: string; key: string };
 
 /**
  * A flat, front-facing video player in a white paper frame. Never skewed or put
@@ -15,12 +16,16 @@ export function Player({
   variant,
   seekRequest,
   onTime,
+  markers = [],
+  onMarker,
 }: {
   variant: "stage" | "compact";
   seekRequest: { t: number; n: number } | null;
   onTime: (t: number) => void;
+  markers?: Marker[];
+  onMarker?: (m: Marker) => void;
 }) {
-  const { view, seek, currentTime, card } = useRoom();
+  const { view, seek, currentTime } = useRoom();
   const ref = useRef<HTMLVideoElement>(null);
   const startAt = useRef(currentTime);
   const v = view.video;
@@ -35,16 +40,6 @@ export function Player({
   }, [seekRequest]);
 
   const duration = v?.durationSec ?? 0;
-  const markers = useMemo<Marker[]>(() => {
-    if (!view.ledger || !view.notes) return [];
-    const l = view.ledger as unknown as Ledger;
-    return Object.entries(view.notes).flatMap(([rid, n]) =>
-      n.observations.flatMap((o) => {
-        const s = deriveSpan(l, o.evidenceIds);
-        return s ? [{ t: s.start, color: card(rid)?.color ?? "#ccc", label: `${card(rid)?.name}: ${o.claim}`, key: `${rid}-${o.id}` }] : [];
-      }),
-    );
-  }, [view.ledger, view.notes, card]);
 
   return (
     <div className="mx-auto" style={{ width: `min(100%, calc(${maxH} * ${aspect}))` }}>
@@ -73,7 +68,7 @@ export function Player({
         )}
       </div>
 
-      {variant === "compact" && duration > 0 && (
+      {variant === "compact" && duration > 0 && markers.length > 0 && (
         <div className="mt-3">
           <div
             role="slider"
@@ -103,6 +98,7 @@ export function Player({
                 onClick={(e) => {
                   e.stopPropagation();
                   seek(m.t);
+                  onMarker?.(m);
                 }}
                 className="absolute top-1/2 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white transition-transform hover:scale-125"
                 style={{ left: `${(m.t / duration) * 100}%`, background: m.color }}

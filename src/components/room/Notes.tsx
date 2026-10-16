@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { deriveSpan, type Ledger } from "@/core/evidence";
 import { Avatar } from "../Avatar";
 import { useRoom } from "./context";
@@ -13,6 +13,16 @@ const SENTIMENT = { working: "Working", problem: "Needs work", neutral: "Note" }
 export function Notes() {
   const { view, card } = useRoom();
   const [who, setWho] = useState<string | null>(null);
+
+  // A timeline dot for a note hidden by the reviewer filter clears the filter so the note can be shown.
+  useEffect(() => {
+    const onFocus = (e: Event) => {
+      const key = (e as CustomEvent<string>).detail;
+      if (who && key.startsWith("note-obs-") && !key.startsWith(`note-obs-${who}-`)) setWho(null);
+    };
+    window.addEventListener("panel:focus", onFocus);
+    return () => window.removeEventListener("panel:focus", onFocus);
+  }, [who]);
   const notes = useMemo(() => view.notes ?? {}, [view.notes]);
   const ledger = view.ledger as unknown as Ledger;
 
@@ -96,7 +106,7 @@ export function Notes() {
           const c = card(rid);
           if (!c) return null;
           return (
-            <li key={`${rid}-${o.id}`} className="cutout p-4 sm:p-5">
+            <li key={`${rid}-${o.id}`} id={`note-obs-${rid}-${o.id}`} className="cutout scroll-mt-24 p-4 sm:p-5">
               <div className="flex flex-wrap items-center gap-2.5">
                 <span className="h-2.5 w-2.5 rounded-full" style={{ background: c.color }} aria-hidden />
                 <span className="text-sm font-medium text-ink">{c.name}</span>

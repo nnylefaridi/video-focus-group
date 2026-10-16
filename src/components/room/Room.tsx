@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import type { ReviewView } from "@/core/view";
 import { RoomContext, type RoomCtx } from "./context";
-import { Player } from "./Player";
+import { Player, type Marker } from "./Player";
+import { deriveSpan, type Ledger } from "@/core/evidence";
 import { BoardView } from "./BoardView";
 import { Discussion } from "./Discussion";
 import { Notes } from "./Notes";
@@ -141,10 +142,58 @@ export function Room({ id }: { id: string }) {
       );
     });
 
+  // Timeline dots for the current section, each tied to the note it should scroll to.
+  const ledger = view.ledger as unknown as Ledger | null;
+  const colorOf = (rid: string) => view.board.find((b) => b.id === rid)?.color ?? "#b8c0ca";
+  const nameOf = (rid: string) => view.board.find((b) => b.id === rid)?.name ?? "";
+  const markers: Marker[] = [];
+  const at = (ids: string[]) => (ledger ? deriveSpan(ledger, ids)?.start : undefined);
+  if (ledger && section === "analysis" && view.notes)
+    for (const [rid, n] of Object.entries(view.notes))
+      for (const o of n.observations) {
+        const t = at(o.evidenceIds);
+        if (t !== undefined) markers.push({ t, key: `note-obs-${rid}-${o.id}`, color: colorOf(rid), label: `${nameOf(rid)}: ${o.claim}` });
+      }
+  if (ledger && section === "discussion" && view.discussion)
+    view.discussion.forEach((turn, i) => {
+      const t = at(turn.evidenceIds);
+      if (t !== undefined) markers.push({ t, key: `note-turn-${i}`, color: colorOf(turn.reviewerId), label: `${nameOf(turn.reviewerId)}: ${turn.text}` });
+    });
+  if (ledger && section === "plan" && view.synthesis) {
+    const p = view.synthesis.plan;
+    p.high.forEach((h, i) => {
+      const t = at(h.evidenceIds);
+      if (t !== undefined) markers.push({ t, key: `note-plan-high-${i}`, color: "var(--accent)", label: h.change });
+    });
+    p.experiments.forEach((e, i) => {
+      const t = at(e.evidenceIds);
+      if (t !== undefined) markers.push({ t, key: `note-plan-exp-${i}`, color: "var(--sage-deep)", label: e.idea });
+    });
+    p.keep.forEach((k, i) => {
+      const t = at(k.evidenceIds);
+      if (t !== undefined) markers.push({ t, key: `note-plan-keep-${i}`, color: "var(--sage)", label: k.what });
+    });
+  }
+
+  /** Scroll to the note behind a timeline dot and let it glow for a moment. */
+  const focusNote = (m: Marker) => {
+    window.dispatchEvent(new CustomEvent("panel:focus", { detail: m.key }));
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        const el = document.getElementById(m.key);
+        if (!el) return;
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+        el.classList.remove("note-flash");
+        void el.offsetWidth;
+        el.classList.add("note-flash");
+      }),
+    );
+  };
+
   const compact = (content: ReactNode) => (
     <div className="mx-auto grid max-w-5xl gap-8 px-4 pt-8 pb-10 sm:px-8 lg:grid-cols-[minmax(0,330px)_minmax(0,1fr)]">
       <div className="lg:sticky lg:top-8 lg:self-start">
-        <Player variant="compact" seekRequest={seekRequest} onTime={setCurrentTime} />
+        <Player variant="compact" seekRequest={seekRequest} onTime={setCurrentTime} markers={markers} onMarker={focusNote} />
       </div>
       <div className="min-w-0">{content}</div>
     </div>

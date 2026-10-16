@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Nunito } from "next/font/google";
 import "./globals.css";
+import { CoffeeLink } from "@/components/CoffeeLink";
 
 const nunito = Nunito({
   variable: "--font-nunito",
@@ -18,6 +19,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="min-h-full">
         <div className="paper-margin" aria-hidden />
         <div className="relative z-[1]">{children}</div>
+        <CoffeeLink />
       </body>
     </html>
   );

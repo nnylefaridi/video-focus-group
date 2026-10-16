@@ -99,3 +99,10 @@ export const Next = ({ className }: P) => (
     <path d="M17.5 6v12M6 6.5v11a.8.8 0 0 0 1.2.7l8.3-5.5a.8.8 0 0 0 0-1.4L7.2 5.8A.8.8 0 0 0 6 6.5z" />
   </svg>
 );
+export const Cup = ({ className }: P) => (
+  <svg viewBox="0 0 24 24" className={className} aria-hidden {...base}>
+    <path d="M5 9h11v5.5A4.5 4.5 0 0 1 11.5 19h-2A4.5 4.5 0 0 1 5 14.5z" />
+    <path d="M16 10.5h1.2a2.3 2.3 0 0 1 0 4.6H16" />
+    <path d="M8.5 3.5c-.6.9.6 1.6 0 2.5M12 3.5c-.6.9.6 1.6 0 2.5" />
+  </svg>
+);

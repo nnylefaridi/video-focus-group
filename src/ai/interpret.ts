@@ -4,7 +4,7 @@ import type { QuestionNode } from "@/core/questionnaire/graph";
 import { callStructured, MODELS } from "./client";
 
 /** Structured fields the interpreter may infer from free text. Free-text fields are copied verbatim instead. */
-const INFERABLE = ["category", "format", "isComedy", "platforms", "offerType", "goal", "placement", "reactions", "niche", "product"] as const;
+const INFERABLE = ["category", "format", "isComedy", "platforms", "offerType", "goal", "placement", "reactions", "niche", "product", "audience", "offer", "desiredAction"] as const;
 
 const InterpretOutput = z.object({
   updates: z.array(
@@ -30,6 +30,9 @@ Fields and allowed values:
 - reactions: comma-separated from laugh, learn, relate, share, follow
 - niche: a few words naming the creator's niche, in their words
 - product: what is being advertised, in their words
+- audience: who the video is for, in their words (only if they actually describe the viewer)
+- offer: what the customer gets or the deal, in their words (ads only)
+- desiredAction: what the viewer should do right after watching, in their words (ads only)
 
 Return an empty updates list if nothing can be inferred.`;
 

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { ExpertCard } from "@/core/expert";
 import { Puppet, type PuppetState } from "../puppets/Puppet";
+import { FIGURE_ASPECT } from "../puppets/Figure";
 
 /*
   The paper puppet theatre: sage paper chairs, popsicle-stick puppets behind a
@@ -104,7 +105,9 @@ export function Boardroom({
   // Stage proportions: taller on phones so the puppets stay big enough to read.
   const ratio = narrow ? 0.78 : 0.5;
   const tableTop = narrow ? 0.52 : 0.45; // where the table starts, as a fraction of stage height
-  const puppetW = narrow ? (n >= 4 ? 245 : n === 3 ? 300 : 320) : n >= 4 ? 190 : n === 3 ? 215 : 235; // in stage units
+  // Puppet width in stage units (the wider figure leaves room for gesturing hands).
+  const puppetW = 1.2 * (narrow ? (n >= 4 ? 245 : n === 3 ? 300 : 320) : n >= 4 ? 190 : n === 3 ? 215 : 235);
+  const figH = puppetW * FIGURE_ASPECT;
   const stageH = W * ratio;
   const tableH = stageH * (1 - tableTop);
 
@@ -117,7 +120,7 @@ export function Boardroom({
           const x = xs[i];
           const tilt = n === 1 ? 0 : ((x - 500) / 500) * 7;
           // The table hides the lower chest, like puppets peeking over a real table.
-          const bottom = yOnEdge(x) + puppetW * 0.3;
+          const bottom = yOnEdge(x) + figH * 0.3;
           return (
             <div key={c.id}>
               {/* chair back, a sage paper cutout behind the puppet */}
@@ -125,10 +128,10 @@ export function Boardroom({
                 aria-hidden
                 className="absolute rounded-t-[42%] rounded-b-md"
                 style={{
-                  left: `${((x - puppetW * 0.55) / W) * 100}%`,
-                  width: `${((puppetW * 1.1) / W) * 100}%`,
-                  top: `${((bottom - puppetW * 0.82) / stageH) * 100}%`,
-                  height: `${((puppetW * 0.75) / stageH) * 100}%`,
+                  left: `${((x - puppetW * 0.42) / W) * 100}%`,
+                  width: `${((puppetW * 0.84) / W) * 100}%`,
+                  top: `${((bottom - figH * 0.74) / stageH) * 100}%`,
+                  height: `${((figH * 0.62) / stageH) * 100}%`,
                   background: "var(--sage)",
                   boxShadow: "0 0 0 4px #fff, 0 4px 10px -4px rgb(40 52 70 / 0.25)",
                   transform: `rotate(${tilt * 0.6}deg)`,
@@ -146,9 +149,11 @@ export function Boardroom({
                 style={{
                   left: `${((x - puppetW / 2) / W) * 100}%`,
                   width: `${(puppetW / W) * 100}%`,
-                  top: `${((bottom - puppetW * 1.2) / stageH) * 100}%`,
-                  transform: `rotate(${tilt}deg)`,
+                  top: `${((bottom - figH) / stageH) * 100}%`,
+                  // A speaking puppet is raised up from behind the table so its stick shows while it wags.
+                  transform: `translateY(${states[c.id] === "speaking" ? "-34%" : "0"}) rotate(${tilt}deg)`,
                   transformOrigin: "50% 160%",
+                  transition: "transform 0.5s cubic-bezier(0.34, 1.5, 0.64, 1)",
                 }}
               >
                 <Puppet id={c.id} name={c.name} state={states[c.id] ?? "idle"} delay={i * 0.7} stick={0.55} />
@@ -167,7 +172,7 @@ export function Boardroom({
           const outer = !narrow && Math.abs(xs[i] - 500) > 200;
           const x = outer ? xs[i] + (xs[i] - 500) * 0.36 : xs[i];
           const tilt = n === 1 ? 0 : ((x - 500) / 500) * 9;
-          const y = yOnEdge(x) + puppetW * (outer ? 0.22 : 0.34);
+          const y = yOnEdge(x) + figH * (outer ? 0.2 : 0.3);
           return (
             <div
               key={c.id}

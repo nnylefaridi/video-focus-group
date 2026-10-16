@@ -35,8 +35,33 @@ describe("questionnaire engine", () => {
     expect(asked).toContain("punchline");
   });
 
-  it("always takes an ad through product, offer, goal and desired action", () => {
-    const { asked } = walk([a("what", { summary: "Meta ad for my skincare serum", category: "ad" })]);
+  it("never shows more than five questions, whatever the answers", () => {
+    for (const first of [
+      { summary: "a video" },
+      { summary: "skit", category: "creator" as const },
+      { summary: "ad", category: "ad" as const },
+      { summary: "vlog", category: "creator" as const, format: "vlog" as const },
+      { summary: "brand film", category: "ad" as const, goal: "awareness" as const },
+    ]) {
+      const { answers, asked } = walk([a("what", first)]);
+      expect(asked.length + 1).toBeLessThanOrEqual(5);
+      expect(answers.length).toBeLessThanOrEqual(5);
+      expect(isComplete(answers)).toBe(true);
+    }
+  });
+
+  it("picks different questions for different goals", () => {
+    const conversion = walk([a("what", { summary: "ad", category: "ad", goal: "conversion", product: "serum", offerType: "physical_product" })]).asked;
+    const awareness = walk([a("what", { summary: "ad", category: "ad", goal: "awareness", product: "serum", offerType: "physical_product" })]).asked;
+    expect(conversion).toContain("offer");
+    expect(awareness).toContain("brand");
+    expect(conversion).not.toEqual(awareness);
+  });
+
+  it("takes a sales ad through product, offer, goal and desired action", () => {
+    const { asked } = walk([a("what", { summary: "Meta ad for my skincare serum", category: "ad" })], (qid) =>
+      qid === "goal" ? a("goal", { goal: "conversion" }, "Get sales or sign-ups now") : null,
+    );
     for (const id of ["product", "offer", "goal", "action"]) expect(asked).toContain(id);
     expect(asked).not.toContain("punchline");
     expect(asked).not.toContain("format");
@@ -58,10 +83,15 @@ describe("questionnaire engine", () => {
     expect(nextQuestion(answers)?.id).toBe("product");
   });
 
-  it("is complete only when every required visible question is resolved", () => {
+  it("is complete once the most useful questions are answered", () => {
     const { answers } = walk([a("what", { summary: "vlog", category: "creator", format: "vlog" })]);
     expect(isComplete(answers)).toBe(true);
     expect(isComplete([a("what", { summary: "vlog", category: "creator" })])).toBe(false);
+  });
+
+  it("asks the comedy punchline before lower-value questions", () => {
+    const { asked } = walk([a("what", { summary: "skit", category: "creator", format: "skit", isComedy: true })]);
+    expect(asked[0]).toBe("punchline");
   });
 
   it("shows explainer-only questions only for explainers", () => {

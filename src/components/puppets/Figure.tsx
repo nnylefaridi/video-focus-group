@@ -2,20 +2,34 @@ import { useId } from "react";
 import type { Look } from "./looks";
 
 /**
- * A reviewer drawn as a squishy paper-cutout cartoon (head and shoulders).
+ * A reviewer drawn as a squishy cartoon paper cutout: dark line art, big soft
+ * head, chunky shaded hair, and arms with an expressive hand gesture.
  * The white cutout edge comes from one SVG filter that dilates the silhouette.
- * viewBox "full" = 0 0 200 240; "head" crops to the face for small avatars.
+ * Coordinates are in a 200-wide space centred on x=100; the full view widens to
+ * fit gesturing hands. "head" crops to the face for small avatars.
  */
+export const FIGURE_VIEWBOX = { x: -30, y: -10, w: 260, h: 270 };
+export const FIGURE_ASPECT = FIGURE_VIEWBOX.h / FIGURE_VIEWBOX.w;
+
+const INK = "#33292A";
+const SW = 3.4;
+
+function darken(hex: string, amt = 0.22): string {
+  const n = parseInt(hex.slice(1), 16);
+  const ch = (s: number) => Math.max(0, Math.round(((n >> s) & 255) * (1 - amt)));
+  return `#${[16, 8, 0].map((s) => ch(s).toString(16).padStart(2, "0")).join("")}`;
+}
+
 export function Figure({ look, crop = "full", className, title }: { look: Look; crop?: "full" | "head"; className?: string; title?: string }) {
   const id = useId().replace(/:/g, "");
-  const viewBox = crop === "head" ? "18 4 164 172" : "-8 -8 216 256";
-  const ink = "#2A2A2E";
+  const v = FIGURE_VIEWBOX;
+  const viewBox = crop === "head" ? "16 2 168 174" : `${v.x} ${v.y} ${v.w} ${v.h}`;
 
   return (
     <svg viewBox={viewBox} className={className} role={title ? "img" : undefined} aria-label={title} aria-hidden={title ? undefined : true}>
       <defs>
         <filter id={`cut-${id}`} x="-15%" y="-15%" width="130%" height="130%">
-          <feMorphology in="SourceAlpha" operator="dilate" radius="5.5" result="grown" />
+          <feMorphology in="SourceAlpha" operator="dilate" radius="6" result="grown" />
           <feFlood floodColor="#ffffff" />
           <feComposite in2="grown" operator="in" result="edge" />
           <feMerge>
@@ -23,25 +37,28 @@ export function Figure({ look, crop = "full", className, title }: { look: Look; 
             <feMergeNode in="SourceGraphic" />
           </feMerge>
         </filter>
-        {crop === "head" && (
-          <clipPath id={`clip-${id}`}>
-            <rect x="12" y="-2" width="176" height="184" rx="30" />
-          </clipPath>
-        )}
+        <clipPath id={`clip-${id}`}>
+          {crop === "head" ? <rect x="10" y="-4" width="180" height="186" rx="30" /> : <rect x={v.x} y={v.y} width={v.w} height={252} />}
+        </clipPath>
       </defs>
-      <g filter={`url(#cut-${id})`} clipPath={crop === "head" ? `url(#clip-${id})` : undefined}>
-        <HairBack look={look} />
-        <Body look={look} />
-        {/* ears */}
-        <circle cx="41" cy="97" r="12" fill={look.skin} />
-        <circle cx="159" cy="97" r="12" fill={look.skin} />
-        <path d="M37 93 Q43 97 39 103" stroke={look.skinShade} strokeWidth="2.5" fill="none" strokeLinecap="round" />
-        <path d="M163 93 Q157 97 161 103" stroke={look.skinShade} strokeWidth="2.5" fill="none" strokeLinecap="round" />
-        {/* head: a slightly squished, soft oval */}
-        <path d="M100 26 C140 26 161 52 161 90 C161 130 136 154 100 154 C64 154 39 130 39 90 C39 52 60 26 100 26 Z" fill={look.skin} />
-        <Beard look={look} />
-        <Hair look={look} />
-        <Face look={look} ink={ink} />
+      <g filter={`url(#cut-${id})`}>
+        <g clipPath={`url(#clip-${id})`} stroke={INK} strokeWidth={SW} strokeLinejoin="round" strokeLinecap="round">
+          <HairBack look={look} />
+          <path d="M86 138 L86 180 Q100 188 114 180 L114 138 Z" fill={look.skinShade} />
+          <Body look={look} />
+          {crop === "full" && <Arms look={look} />}
+          {/* ears */}
+          <circle cx="40" cy="97" r="13" fill={look.skin} />
+          <circle cx="160" cy="97" r="13" fill={look.skin} />
+          <path d="M36 92 Q44 97 38 104" stroke={look.skinShade} strokeWidth="3" fill="none" />
+          <path d="M164 92 Q156 97 162 104" stroke={look.skinShade} strokeWidth="3" fill="none" />
+          {/* head: big, soft and slightly squarish at the jaw */}
+          <path d="M100 24 C142 24 163 50 163 90 C163 128 140 156 100 156 C60 156 37 128 37 90 C37 50 58 24 100 24 Z" fill={look.skin} />
+          <path d="M60 140 C76 152 124 152 140 140 C128 156 72 156 60 140 Z" fill={look.skinShade} stroke="none" opacity="0.5" />
+          <Beard look={look} />
+          <Hair look={look} />
+          <Face look={look} />
+        </g>
       </g>
     </svg>
   );
@@ -51,87 +68,191 @@ function HairBack({ look }: { look: Look }) {
   if (look.hairStyle !== "capLong") return null;
   return (
     <g fill={look.hair}>
-      <path d="M44 78 C30 118 28 168 40 198 L76 192 C62 160 58 122 62 96 Z" />
-      <path d="M156 78 C170 118 172 168 160 198 L124 192 C138 160 142 122 138 96 Z" />
+      <path d="M44 78 C28 118 26 172 38 204 L78 198 C62 164 58 124 62 96 Z" />
+      <path d="M156 78 C172 118 174 172 162 204 L122 198 C138 164 142 124 138 96 Z" />
+      <path d="M44 120 C42 150 46 176 52 196 M156 120 C158 150 154 176 148 196" stroke={darken(look.hair, 0.4)} strokeWidth="2.5" fill="none" />
     </g>
   );
 }
 
 function Body({ look }: { look: Look }) {
   const { outfit, outfitColor: c, outfitShade: s } = look;
+  const light = "#EEF1F4";
   return (
     <g>
-      <rect x="85" y="138" width="30" height="40" rx="12" fill={look.skinShade} />
-      {outfit === "hoodie" && <path d="M58 182 Q100 150 142 182 Q128 200 100 202 Q72 200 58 182 Z" fill={s} />}
-      <path
-        d="M22 240 C22 198 52 170 100 168 C148 170 178 198 178 240 Z"
-        fill={c}
-        stroke={look.hairOutline && outfit === "suit" ? "#D3D8DE" : "none"}
-        strokeWidth="2"
-      />
-      {outfit === "tee" && <path d="M80 170 Q100 188 120 170" stroke={s} strokeWidth="5" fill="none" strokeLinecap="round" />}
+      <path d="M16 262 C16 206 50 174 100 172 C150 174 184 206 184 262 Z" fill={c} />
+      {/* soft shading down one side, the way the cutouts are painted */}
+      <path d="M142 186 C166 198 180 224 184 262 L152 262 C154 230 150 206 142 186 Z" fill={s} stroke="none" opacity="0.7" />
+      {outfit === "tee" && <path d="M80 175 Q100 193 120 175" fill="none" />}
       {outfit === "hoodie" && (
         <>
-          <path d="M70 184 Q100 200 130 184" stroke={s} strokeWidth="5" fill="none" strokeLinecap="round" />
-          <path d="M90 194 L88 222 M110 194 L112 222" stroke="#E6E9EE" strokeWidth="3" strokeLinecap="round" />
-          <circle cx="88" cy="224" r="3" fill="#E6E9EE" />
-          <circle cx="112" cy="224" r="3" fill="#E6E9EE" />
+          <path d="M56 188 Q100 150 144 188 Q130 208 100 210 Q70 208 56 188 Z" fill={s} />
+          <path d="M78 186 Q100 200 122 186" fill="none" />
+          <path d="M90 204 L88 232 M110 204 L112 232" stroke={light} strokeWidth="3.5" />
+          <circle cx="88" cy="235" r="3.5" fill={light} strokeWidth="2" />
+          <circle cx="112" cy="235" r="3.5" fill={light} strokeWidth="2" />
+          <path d="M70 246 Q100 236 130 246" fill="none" stroke={s} strokeWidth="3" />
         </>
       )}
       {(outfit === "jacket" || outfit === "blazer" || outfit === "suit") && (
         <>
-          <path d="M82 170 L100 214 L118 170 Z" fill={look.inner ?? s} />
-          <path d="M82 170 L100 214 L74 206 L64 182 Z" fill={s} />
-          <path d="M118 170 L100 214 L126 206 L136 182 Z" fill={s} />
-          {look.tie && <path d="M96 176 L104 176 L107 206 L100 216 L93 206 Z" fill={look.tie} />}
-          {outfit === "jacket" && <path d="M100 214 L100 240" stroke={s} strokeWidth="3" />}
+          <path d="M80 172 L100 222 L120 172 Z" fill={look.inner ?? s} />
+          {look.tie && <path d="M95 180 L105 180 L108 214 L100 226 L92 214 Z" fill={look.tie} />}
+          <path d="M80 172 L100 222 L72 214 L60 186 Z" fill={s} />
+          <path d="M120 172 L100 222 L128 214 L140 186 Z" fill={s} />
+          {outfit === "jacket" && <path d="M100 222 L100 262" fill="none" />}
+          {outfit !== "jacket" && <circle cx="100" cy="240" r="3.2" fill={s} />}
         </>
       )}
       {outfit === "shirt" && (
         <>
-          <path d="M80 168 L93 188 L100 174 L107 188 L120 168 Q100 176 80 168 Z" fill={s} />
-          <path d="M100 176 L100 240" stroke={s} strokeWidth="3" />
-          {[196, 212, 228].map((y) => (
-            <circle key={y} cx="100" cy={y} r="2.6" fill="#E6E9EE" />
+          <path d="M100 178 L100 262" fill="none" stroke={s} strokeWidth="3" />
+          <path d="M78 170 L92 192 L100 178 L108 192 L122 170 Q100 180 78 170 Z" fill={s} />
+          {[202, 220, 238].map((y) => (
+            <circle key={y} cx="100" cy={y} r="3" fill={light} strokeWidth="1.8" />
           ))}
+          <path d="M136 214 L150 214 L150 228 L136 228 Z" fill={s} strokeWidth="2.4" />
         </>
       )}
     </g>
   );
 }
 
+/** A cartoon hand, palm out, fingers up. Local origin is the middle of the palm. */
+function OpenHand({ skin, x, y, rot }: { skin: string; x: number; y: number; rot: number }) {
+  return (
+    <g transform={`translate(${x} ${y}) rotate(${rot})`} fill={skin} strokeWidth="2.8">
+      <rect x="-14" y="-34" width="7.5" height="24" rx="3.75" />
+      <rect x="-6.5" y="-39" width="7.5" height="29" rx="3.75" />
+      <rect x="1" y="-38" width="7.5" height="28" rx="3.75" />
+      <rect x="8.5" y="-31" width="7" height="21" rx="3.5" />
+      <rect x="-27" y="-13" width="17" height="8" rx="4" transform="rotate(-28 -14 -9)" />
+      <path d="M-15 -14 C-15 -24 16 -24 16 -14 L15 4 C13 13 -13 13 -15 4 Z" />
+    </g>
+  );
+}
+
+/** A hand with the index finger raised to make a point. */
+function PointHand({ skin, x, y, rot }: { skin: string; x: number; y: number; rot: number }) {
+  return (
+    <g transform={`translate(${x} ${y}) rotate(${rot})`} fill={skin} strokeWidth="2.8">
+      <rect x="-4" y="-44" width="8.5" height="34" rx="4.25" />
+      <rect x="-14" y="-18" width="28" height="28" rx="11" />
+      <path d="M-11 -6 L9 -6 M-11 2 L9 2" fill="none" strokeWidth="2" />
+      <path d="M-14 -2 Q-4 -10 6 -4" fill="none" strokeWidth="2.4" />
+    </g>
+  );
+}
+
+function ArmTube({ d, color }: { d: string; color: string }) {
+  return (
+    <>
+      <path d={d} fill="none" stroke={INK} strokeWidth="31" />
+      <path d={d} fill="none" stroke={color} strokeWidth="24" />
+    </>
+  );
+}
+
+/** One gesturing arm on the viewer's right; mirrored for the left. */
+function RightArm({ look, kind }: { look: Look; kind: "open" | "point" }) {
+  const bare = look.outfit === "tee";
+  return (
+    <g>
+      {bare ? (
+        <>
+          <ArmTube d="M150 214 Q190 218 194 176" color={look.skin} />
+          <ArmTube d="M150 214 Q176 214 184 202" color={look.outfitColor} />
+        </>
+      ) : (
+        <ArmTube d="M150 214 Q190 218 194 178" color={look.outfitColor} />
+      )}
+      {!bare && <path d="M184 182 L204 182" stroke={INK} strokeWidth="2.6" />}
+      {kind === "open" ? <OpenHand skin={look.skin} x={196} y={160} rot={10} /> : <PointHand skin={look.skin} x={194} y={164} rot={4} />}
+    </g>
+  );
+}
+
+function Arms({ look }: { look: Look }) {
+  const mirror = "translate(200 0) scale(-1 1)";
+  switch (look.gesture) {
+    case "open-right":
+      return <RightArm look={look} kind="open" />;
+    case "open-left":
+      return (
+        <g transform={mirror}>
+          <RightArm look={look} kind="open" />
+        </g>
+      );
+    case "point-right":
+      return <RightArm look={look} kind="point" />;
+    case "point-left":
+      return (
+        <g transform={mirror}>
+          <RightArm look={look} kind="point" />
+        </g>
+      );
+    case "both-open":
+      return (
+        <>
+          <RightArm look={look} kind="open" />
+          <g transform={mirror}>
+            <RightArm look={look} kind="open" />
+          </g>
+        </>
+      );
+    case "crossed":
+      return (
+        <g>
+          <ArmTube d="M44 238 Q100 210 156 230" color={look.outfitShade} />
+          <ArmTube d="M156 244 Q100 222 46 232" color={look.outfitColor} />
+          <circle cx="150" cy="229" r="9" fill={look.skin} strokeWidth="2.6" />
+          <circle cx="51" cy="231" r="9" fill={look.skin} strokeWidth="2.6" />
+        </g>
+      );
+    default:
+      return null;
+  }
+}
+
 function Hair({ look }: { look: Look }) {
   const h = look.hair;
-  const o = look.hairOutline;
-  const stroke = o ? { stroke: o, strokeWidth: 2.5 } : {};
+  const strand = { stroke: look.hairOutline ?? darken(h, 0.35), strokeWidth: 2.6, fill: "none" };
   switch (look.hairStyle) {
     case "capLong":
       return (
         <g>
-          <path d="M40 84 C38 42 64 20 100 20 C136 20 162 42 160 84 Z" fill={look.cap!.color} />
-          <path d="M100 20 L100 84" stroke={look.cap!.shade} strokeWidth="2" opacity="0.6" />
-          <path d="M32 82 C70 66 142 66 178 86 C180 94 172 98 162 96 C132 88 76 88 38 94 C32 92 30 86 32 82 Z" fill={look.cap!.shade} />
-          <path d="M84 60 L92 50 L99 57 L106 48 L116 60" stroke="#FFFFFF" strokeWidth="3.2" fill="none" strokeLinejoin="round" strokeLinecap="round" />
-          <path d="M42 94 C40 110 42 118 46 124 M158 94 C160 110 158 118 154 124" stroke={h} strokeWidth="10" strokeLinecap="round" />
+          <path d="M40 86 C38 42 64 18 100 18 C136 18 162 42 160 86 Z" fill={look.cap!.color} />
+          <path d="M100 18 L100 84" fill="none" stroke={look.cap!.shade} strokeWidth="2.4" />
+          <path d="M128 26 C146 36 156 56 158 82 L142 84 C142 60 136 40 128 26 Z" fill={look.cap!.shade} stroke="none" opacity="0.6" />
+          <path d="M30 84 C70 66 144 66 180 88 C182 97 172 101 162 99 C132 90 76 90 38 96 C30 94 28 88 30 84 Z" fill={look.cap!.shade} />
+          <path d="M83 58 L92 47 L99 55 L107 45 L118 58" stroke="#FFFFFF" strokeWidth="3.6" fill="none" />
+          <path d="M40 96 C38 112 41 122 46 130 M160 96 C162 112 159 122 154 130" fill="none" stroke={h} strokeWidth="11" />
         </g>
       );
     case "shortTextured":
       return (
-        <g fill={h}>
-          <path d="M40 94 C34 50 60 22 102 22 C146 24 166 54 160 94 C156 76 150 66 142 60 C134 68 120 62 114 54 C106 64 90 62 84 54 C76 64 62 64 56 66 C48 74 44 82 40 94 Z" />
-          <path d="M98 22 C104 10 118 8 124 14 C116 16 110 20 108 26 Z" />
+        <g>
+          <path
+            d="M38 96 C32 50 60 20 102 20 C146 22 168 54 162 96 C158 78 152 66 143 60 C134 68 120 62 114 54 C106 64 90 62 84 54 C76 64 62 64 55 67 C47 75 42 84 38 96 Z"
+            fill={h}
+          />
+          <path d="M98 22 C102 6 120 4 128 12 C118 14 112 18 110 26 Z" fill={h} />
+          <path d="M60 46 C72 36 84 32 96 32 M112 32 C128 34 142 42 150 54" {...strand} />
         </g>
       );
     case "curly": {
       const curls: [number, number, number][] = [
-        [46, 76, 15], [52, 54, 16], [66, 36, 16], [86, 26, 16], [108, 24, 16], [128, 30, 16], [146, 46, 16], [155, 70, 15],
-        [70, 54, 14], [92, 44, 14], [114, 44, 14], [134, 56, 13],
+        [44, 78, 15], [50, 54, 16], [64, 35, 16], [85, 24, 16], [108, 22, 16], [130, 29, 16], [148, 45, 16], [157, 70, 15],
+        [70, 54, 14], [92, 44, 14], [114, 44, 14], [135, 56, 13],
       ];
       return (
         <g fill={h}>
-          <path d="M42 88 C38 42 68 22 100 22 C132 22 162 42 158 88 C150 66 130 58 100 58 C70 58 50 66 42 88 Z" />
+          <path d="M42 90 C38 42 68 20 100 20 C132 20 162 42 158 90 C150 66 130 58 100 58 C70 58 50 66 42 90 Z" />
           {curls.map(([cx, cy, r], i) => (
             <circle key={i} cx={cx} cy={cy} r={r} />
+          ))}
+          {curls.slice(0, 8).map(([cx, cy], i) => (
+            <path key={`c${i}`} d={`M${cx - 6} ${cy + 2} q6 -7 12 0`} {...strand} />
           ))}
         </g>
       );
@@ -140,42 +261,48 @@ function Hair({ look }: { look: Look }) {
       return (
         <g>
           <path
-            d="M40 94 C32 56 56 24 98 22 C146 20 170 52 160 94 C158 78 152 70 146 66 C152 56 142 48 134 52 C130 40 114 42 110 50 C100 38 84 44 82 54 C70 50 58 56 62 66 C50 68 44 80 40 94 Z"
+            d="M38 96 C30 56 54 22 98 20 C148 18 172 52 162 96 C160 80 154 72 147 67 C153 56 143 48 135 52 C131 40 114 42 110 50 C100 38 84 44 82 54 C70 50 58 56 62 66 C50 68 43 80 38 96 Z"
             fill={h}
           />
-          <path d="M70 40 C80 34 90 34 98 38 M114 34 C126 34 136 40 142 48" stroke="#A8ADB2" strokeWidth="3" fill="none" strokeLinecap="round" />
+          <path d="M68 40 C78 32 90 32 98 36 M114 32 C126 32 138 38 144 48 M56 70 C60 62 66 58 74 58" stroke="#B4B9BE" strokeWidth="3" fill="none" />
         </g>
       );
     case "swept":
       return (
-        <g fill={h} {...stroke}>
-          <path d="M41 90 C35 48 62 18 104 18 C146 18 168 46 159 84 C150 66 132 60 112 60 C96 60 84 56 78 46 C72 56 56 68 41 90 Z" />
-          {o && (
-            <path d="M66 44 C88 30 120 28 146 42 M84 54 C104 44 128 44 148 54" stroke={o} strokeWidth="2.5" fill="none" strokeLinecap="round" />
-          )}
+        <g fill={h}>
+          <path d="M40 92 C34 48 62 16 104 16 C147 16 170 46 160 86 C151 66 132 60 112 60 C96 60 84 56 78 46 C72 56 56 68 40 92 Z" />
+          <path d="M64 42 C86 28 120 26 146 40 M84 52 C104 44 128 44 150 56" {...strand} />
         </g>
       );
     case "sidePart":
       return (
         <g>
-          <path d="M40 92 C36 50 62 22 100 22 C140 22 164 48 160 92 C154 72 146 62 134 58 C112 64 86 60 70 50 C58 60 48 74 40 92 Z" fill={h} />
-          <path d="M70 50 C84 40 100 33 116 31" stroke="#00000033" strokeWidth="3" fill="none" strokeLinecap="round" />
+          <path d="M38 94 C34 50 62 20 100 20 C140 20 166 48 162 94 C156 74 146 62 134 58 C112 64 86 60 70 50 C58 60 46 74 38 94 Z" fill={h} />
+          <path d="M70 50 C84 40 100 32 118 30 M120 40 C134 42 146 50 152 60" {...strand} />
         </g>
       );
     case "buzz":
-      return <path d="M42 86 C40 46 66 24 100 24 C134 24 160 46 158 86 C152 64 140 54 100 52 C60 54 48 64 42 86 Z" fill={h} opacity="0.92" />;
+      return (
+        <g>
+          <path d="M42 88 C40 44 66 22 100 22 C134 22 160 44 158 88 C152 64 138 54 100 52 C62 54 48 64 42 88 Z" fill={h} />
+          <path d="M64 36 L66 40 M80 30 L81 34 M98 28 L98 32 M116 29 L115 33 M132 34 L130 38" {...strand} />
+        </g>
+      );
     case "balding":
       return (
         <g fill={h}>
-          <path d="M40 100 C36 78 42 62 54 54 C52 70 52 86 56 102 Z" />
-          <path d="M160 100 C164 78 158 62 146 54 C148 70 148 86 144 102 Z" />
-          <path d="M82 34 C94 28 108 28 120 33" stroke={h} strokeWidth="4" fill="none" strokeLinecap="round" />
+          <path d="M38 102 C34 78 40 62 54 52 C52 70 52 88 56 104 Z" />
+          <path d="M162 102 C166 78 160 62 146 52 C148 70 148 88 144 104 Z" />
+          <path d="M82 32 C94 26 108 26 120 31" fill="none" strokeWidth="3" />
         </g>
       );
     case "shortNeat":
     default:
       return (
-        <path d="M40 90 C36 48 62 22 100 22 C138 22 164 48 160 90 C156 72 146 62 134 58 C120 50 80 50 66 58 C54 64 44 74 40 90 Z" fill={h} />
+        <g>
+          <path d="M38 92 C34 46 62 20 100 20 C138 20 166 46 162 92 C158 74 146 62 134 58 C120 50 80 50 66 58 C54 64 42 76 38 92 Z" fill={h} />
+          <path d="M66 40 C80 32 96 30 110 30 M120 32 C134 36 146 44 152 56" {...strand} />
+        </g>
       );
   }
 }
@@ -183,72 +310,73 @@ function Hair({ look }: { look: Look }) {
 function Beard({ look }: { look: Look }) {
   if (!look.beard) return null;
   const c = look.beardColor ?? look.hair;
-  const mustache = <path d="M76 124 C86 114 96 116 100 120 C104 116 114 114 124 124 C112 127 104 125 100 125 C96 125 88 127 76 124 Z" fill={c} />;
+  const tex = { stroke: darken(c, 0.35), strokeWidth: 2.4, fill: "none" };
+  const mustache = <path d="M74 124 C85 112 96 115 100 119 C104 115 115 112 126 124 C113 128 104 126 100 126 C96 126 87 128 74 124 Z" fill={c} />;
   if (look.beard === "full")
     return (
       <g>
-        <path d="M40 92 C40 142 64 168 100 170 C136 168 160 142 160 92 C154 114 142 128 128 130 C118 120 82 120 72 130 C58 128 46 114 40 92 Z" fill={c} />
+        <path d="M37 92 C37 146 62 172 100 174 C138 172 163 146 163 92 C157 116 143 130 128 132 C118 122 82 122 72 132 C57 130 43 116 37 92 Z" fill={c} />
+        <path d="M60 140 l4 6 M82 152 l2 6 M100 156 l0 7 M118 152 l-2 6 M140 140 l-4 6" {...tex} />
         {mustache}
       </g>
     );
   const shape = (
-    <path d="M48 106 C52 146 74 160 100 162 C126 160 148 146 152 106 C146 124 134 134 124 134 C116 126 84 126 76 134 C66 134 54 124 48 106 Z" fill={c} />
+    <path d="M46 106 C50 148 74 164 100 166 C126 164 150 148 154 106 C147 126 134 136 124 136 C116 127 84 127 76 136 C66 136 53 126 46 106 Z" fill={c} />
   );
-  if (look.beard === "stubble") return <g opacity="0.22">{shape}</g>;
+  if (look.beard === "stubble") return <g opacity="0.24" stroke="none">{shape}</g>;
   return (
     <g>
       {shape}
+      <path d="M70 146 l3 5 M100 158 l0 6 M130 146 l-3 5" {...tex} />
       {mustache}
     </g>
   );
 }
 
-function Face({ look, ink }: { look: Look; ink: string }) {
-  const brow = look.browColor ?? (look.hairStyle === "balding" ? look.hair : look.hair === "#F2F2EF" ? "#B9BEC4" : look.hair);
+function Face({ look }: { look: Look }) {
+  const brow = look.browColor ?? (look.hairStyle === "balding" ? darken(look.hair, 0.25) : darken(look.hair, 0.15));
   const browPaths = {
-    flat: ["M69 81 Q80 77 91 81", "M109 81 Q120 77 131 81"],
-    raised: ["M68 77 Q80 69 92 76", "M108 76 Q120 69 132 77"],
-    determined: ["M69 77 L91 84", "M131 77 L109 84"],
-    soft: ["M70 80 Q80 75 90 79", "M110 79 Q120 75 130 80"],
+    flat: ["M68 81 Q80 76 92 80", "M108 80 Q120 76 132 81"],
+    raised: ["M67 76 Q80 67 93 75", "M107 75 Q120 67 133 76"],
+    determined: ["M68 76 L92 84", "M132 76 L108 84"],
+    soft: ["M69 80 Q80 74 91 78", "M109 78 Q120 74 131 80"],
   }[look.brows];
-  const mouthY = look.beard === "full" ? 0 : 0;
   return (
     <g>
       {browPaths.map((d, i) => (
-        <path key={i} d={d} stroke={brow} strokeWidth="5" fill="none" strokeLinecap="round" />
+        <path key={i} d={d} stroke={brow} strokeWidth="6.5" fill="none" />
       ))}
       {look.shades ? (
         <g>
-          <rect x="62" y="86" width="34" height="22" rx="9" fill="#1E2126" />
-          <rect x="104" y="86" width="34" height="22" rx="9" fill="#1E2126" />
-          <path d="M96 93 Q100 90 104 93" stroke="#1E2126" strokeWidth="4" fill="none" />
-          <path d="M68 92 L76 92 M110 92 L118 92" stroke="#FFFFFF" strokeWidth="2.5" strokeLinecap="round" opacity="0.7" />
+          <rect x="60" y="85" width="37" height="24" rx="10" fill="#1E2126" />
+          <rect x="103" y="85" width="37" height="24" rx="10" fill="#1E2126" />
+          <path d="M97 93 Q100 90 103 93" fill="none" strokeWidth="4" />
+          <path d="M67 92 L77 92 M110 92 L120 92" stroke="#FFFFFF" strokeWidth="3" opacity="0.75" />
         </g>
       ) : (
-        <g>
-          <ellipse cx="80" cy="98" rx="6.8" ry="9" fill={ink} />
-          <ellipse cx="120" cy="98" rx="6.8" ry="9" fill={ink} />
-          <circle cx="82.5" cy="94.5" r="2.6" fill="#FFFFFF" />
-          <circle cx="122.5" cy="94.5" r="2.6" fill="#FFFFFF" />
+        <g stroke="none">
+          <ellipse cx="80" cy="98" rx="7.6" ry="10" fill={INK} />
+          <ellipse cx="120" cy="98" rx="7.6" ry="10" fill={INK} />
+          <circle cx="82.8" cy="94" r="3" fill="#FFFFFF" />
+          <circle cx="122.8" cy="94" r="3" fill="#FFFFFF" />
         </g>
       )}
-      {look.older && (
-        <path d="M60 108 Q64 112 62 116 M140 108 Q136 112 138 116" stroke={look.skinShade} strokeWidth="2.5" fill="none" strokeLinecap="round" />
-      )}
-      <circle cx="68" cy="116" r="8" fill="#F29C93" opacity="0.38" />
-      <circle cx="132" cy="116" r="8" fill="#F29C93" opacity="0.38" />
-      <path d="M100 103 Q107 111 99 114" stroke={look.skinShade} strokeWidth="3" fill="none" strokeLinecap="round" />
-      <g transform={`translate(0 ${mouthY})`}>
-        {look.mouth === "grin" && (
-          <g>
-            <path d="M84 124 Q100 147 116 124 Z" fill="#7A3838" />
-            <path d="M86 125 L114 125 L112.5 129 L87.5 129 Z" fill="#FFFFFF" />
-          </g>
-        )}
-        {look.mouth === "smile" && <path d="M87 127 Q100 138 113 127" stroke={ink} strokeWidth="3.5" fill="none" strokeLinecap="round" />}
-        {look.mouth === "smirk" && <path d="M89 130 Q102 135 113 125" stroke={ink} strokeWidth="3.5" fill="none" strokeLinecap="round" />}
-        {look.mouth === "calm" && <path d="M91 130 Q100 134 109 130" stroke={ink} strokeWidth="3.5" fill="none" strokeLinecap="round" />}
+      {look.older && <path d="M58 108 Q63 113 60 118 M142 108 Q137 113 140 118" stroke={look.skinShade} strokeWidth="3" fill="none" />}
+      <g stroke="none">
+        <ellipse cx="66" cy="117" rx="9" ry="6.5" fill="#EE918A" opacity="0.42" />
+        <ellipse cx="134" cy="117" rx="9" ry="6.5" fill="#EE918A" opacity="0.42" />
       </g>
+      <path d="M100 103 Q109 110 100 115" fill="none" strokeWidth="3" />
+      {look.mouth === "grin" && (
+        <g>
+          <path d="M82 124 Q100 152 118 124 Z" fill="#5E2A2A" />
+          <path d="M85 125.5 L115 125.5 L113 131 L87 131 Z" fill="#FFFFFF" stroke="none" />
+          <path d="M91 139 Q100 133 109 139 Q100 147 91 139 Z" fill="#E07C7C" stroke="none" />
+        </g>
+      )}
+      {look.mouth === "smile" && <path d="M86 127 Q100 140 114 127" fill="none" strokeWidth="4" />}
+      {look.mouth === "smirk" && <path d="M88 131 Q103 137 114 125" fill="none" strokeWidth="4" />}
+      {look.mouth === "calm" && <path d="M90 131 Q100 135 110 131" fill="none" strokeWidth="4" />}
     </g>
   );
 }

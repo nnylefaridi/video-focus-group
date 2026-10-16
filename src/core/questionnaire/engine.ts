@@ -1,5 +1,5 @@
 import { IntentFields } from "../intent";
-import { QUESTIONS, QUESTION_BY_ID, type QuestionNode } from "./graph";
+import { MAX_QUESTIONS, QUESTIONS, QUESTION_BY_ID, priorityOf, type QuestionNode } from "./graph";
 
 /** One stored answer. `fields` is what the answer contributed to the intent. */
 export type Answer = {
@@ -59,20 +59,29 @@ export function visibleQuestions(fields: IntentFields): QuestionNode[] {
   return QUESTIONS.filter((q) => !q.showIf || q.showIf(fields));
 }
 
-/**
- * The next question to ask, or null when the flow is complete.
- * A question is skipped when it was already answered/skipped, or when an
- * earlier free-text answer already filled everything it would ask for.
- */
-export function nextQuestion(answers: Answer[]): QuestionNode | null {
+/** Questions still worth asking, most useful first (before the 5-question cap). */
+function candidates(answers: Answer[]): QuestionNode[] {
   const { fields, active } = resolve(answers);
   const answered = new Set(active.map((a) => a.questionId));
-  for (const q of visibleQuestions(fields)) {
-    if (answered.has(q.id)) continue;
-    if (isFilled(fields, q)) continue;
-    return q;
-  }
-  return null;
+  return visibleQuestions(fields)
+    .filter((q) => !answered.has(q.id) && !isFilled(fields, q))
+    .sort((a, b) => priorityOf(b.id, fields) - priorityOf(a.id, fields));
+}
+
+/** How many questions have been shown so far (answered or skipped). */
+export function askedCount(answers: Answer[]): number {
+  return resolve(answers).active.length;
+}
+
+/**
+ * The next question to ask, or null when the flow is complete. Never more than
+ * five questions in total; which ones depends on what earlier answers revealed
+ * (free-text answers can fill several fields at once, and priorities shift with
+ * the kind of video and its goal).
+ */
+export function nextQuestion(answers: Answer[]): QuestionNode | null {
+  if (askedCount(answers) >= MAX_QUESTIONS) return null;
+  return candidates(answers)[0] ?? null;
 }
 
 /** Questions skipped because an earlier answer already covered them, for the summary screen. */
@@ -82,11 +91,9 @@ export function inferredQuestions(answers: Answer[]): QuestionNode[] {
   return visibleQuestions(fields).filter((q) => !answered.has(q.id) && isFilled(fields, q));
 }
 
-/** Rough count of questions left, for the quiet progress indicator. */
+/** Questions left, for the quiet progress indicator. */
 export function remainingCount(answers: Answer[]): number {
-  const { fields, active } = resolve(answers);
-  const answered = new Set(active.map((a) => a.questionId));
-  return visibleQuestions(fields).filter((q) => !answered.has(q.id) && !isFilled(fields, q)).length;
+  return Math.min(candidates(answers).length, Math.max(0, MAX_QUESTIONS - askedCount(answers)));
 }
 
 /** Replace the answer to one question (editing) and drop answers that no longer apply. */

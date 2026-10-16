@@ -86,7 +86,7 @@ export function Plan({ s }: { s: Synthesis }) {
         <p className="mt-1 text-sm text-ink-soft">Backed by clear evidence and either agreement or a well-documented principle.</p>
         <ol className="mt-4 space-y-3">
           {s.plan.high.map((h, i) => (
-            <li key={i} className="flex gap-4 cutout p-4 sm:p-5">
+            <li key={i} id={`note-plan-high-${i}`} className="cutout flex scroll-mt-24 gap-4 p-4 sm:p-5">
               <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-accent font-display font-extrabold text-accent-ink">{i + 1}</span>
               <div className="min-w-0 flex-1">
                 <p className="text-ink">{h.change}</p>
@@ -107,7 +107,7 @@ export function Plan({ s }: { s: Synthesis }) {
         <p className="mt-1 text-sm text-ink-soft">Matters of taste or real disagreement. Try a version and see which feels right.</p>
         <ul className="mt-4 space-y-3">
           {s.plan.experiments.map((e, i) => (
-            <li key={i} className="cutout p-4 sm:p-5">
+            <li key={i} id={`note-plan-exp-${i}`} className="cutout scroll-mt-24 p-4 sm:p-5">
               <div className="flex flex-wrap items-center gap-2">
                 <p className="text-ink">{e.idea}</p>
                 {e.evidenceIds.length > 0 && <TimeChip ids={e.evidenceIds} />}
@@ -130,7 +130,7 @@ export function Plan({ s }: { s: Synthesis }) {
         <h2 className="font-display font-extrabold text-2xl text-ink">Keep these</h2>
         <ul className="mt-4 space-y-3">
           {s.plan.keep.map((k, i) => (
-            <li key={i} className="flex gap-4 rounded-2xl bg-accent-soft p-4">
+            <li key={i} id={`note-plan-keep-${i}`} className="flex scroll-mt-24 gap-4 rounded-2xl bg-accent-soft p-4">
               <div className="min-w-0 flex-1">
                 <p className="text-ink">{k.what}</p>
                 <div className="mt-2 flex flex-wrap items-center gap-3">

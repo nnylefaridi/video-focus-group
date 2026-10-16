@@ -23,7 +23,7 @@ export function Discussion({ turns }: { turns: StoredTurn[] }) {
         if (!c) return null;
         const other = t.respondsTo ? card(t.respondsTo) : null;
         return (
-          <li key={i} className="flex gap-3.5">
+          <li key={i} id={`note-turn-${i}`} className="flex scroll-mt-24 gap-3.5 rounded-2xl">
             <Avatar card={c} size={46} />
             <div className="min-w-0 flex-1">
               <p className="text-sm">
