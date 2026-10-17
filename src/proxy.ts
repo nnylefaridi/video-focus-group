@@ -22,6 +22,8 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  // Skip static files, images and signed media (they don't need the session).
-  matcher: ["/((?!_next/static|_next/image|api/media|favicon.ico|.*\\.(?:png|jpg|jpeg|svg|webp)$).*)"],
+  // Skip static files, images and signed media (they don't need the session), and video
+  // uploads: Next.js buffers any request body that passes through the proxy (10 MB max),
+  // which would cut uploads short. The upload route checks who's uploading itself.
+  matcher: ["/((?!_next/static|_next/image|api/media|api/reviews/.*/video|favicon.ico|.*\\.(?:png|jpg|jpeg|svg|webp)$).*)"],
 };
