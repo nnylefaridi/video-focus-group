@@ -1,7 +1,11 @@
 import { z } from "zod";
 import { connection } from "next/server";
 import type Anthropic from "@anthropic-ai/sdk";
-import { getReview, reviewDir, updateReview } from "@/server/reviews";
+import { reviewDir, updateReview, type ReviewRecord } from "@/server/reviews";
+import { accessibleReview } from "@/server/auth";
+import { clientKey } from "@/server/client";
+import { enqueue } from "@/server/jobs";
+import { restoreFile } from "@/server/storage";
 import { addMessage, getThread } from "@/server/followups";
 import { getProfile } from "@/experts/load";
 import { followupSystem, INSPECT_TOOL, MODELS, streamText } from "@/ai/followup";
@@ -9,7 +13,7 @@ import { AiUnavailable, BudgetExceeded } from "@/ai/client";
 import { denseSample } from "@/media/pipeline";
 import { perceiveFrames } from "@/ai/perceive";
 import { evidenceSpan, type Ledger } from "@/core/evidence";
-import { assertCanAskFollowup, LimitReached } from "@/server/budget";
+import { spendFollowup, LimitReached } from "@/server/budget";
 
 const Body = z.object({ reviewerId: z.string(), message: z.string().trim().min(1).max(2000) });
 
@@ -17,20 +21,25 @@ export async function GET(req: Request, ctx: RouteContext<"/api/reviews/[id]/cha
   await connection();
   const { id } = await ctx.params;
   const reviewerId = new URL(req.url).searchParams.get("reviewer") ?? "";
-  if (!getReview(id)) return Response.json({ error: "Not found" }, { status: 404 });
-  return Response.json({ messages: getThread(id, reviewerId) });
+  if (!(await accessibleReview(id))) return Response.json({ error: "Not found" }, { status: 404 });
+  return Response.json({ messages: await getThread(id, reviewerId) });
 }
 
-async function inspect(reviewId: string, ledger: Ledger, seconds: number, focus: string) {
+async function inspect(r: ReviewRecord, ledger: Ledger, seconds: number, focus: string) {
+  const reviewId = r.id;
   const dir = reviewDir(reviewId);
+  // The working copy may have been cleared; a kept review's video comes back from storage.
+  if (r.userId && r.storedFiles.includes("video.mp4")) await restoreFile(r.userId, reviewId, "video.mp4");
   const t = Math.min(Math.max(0, seconds), ledger.coverage.durationSec);
   const added = await denseSample(dir, ledger.frames, ledger.shots, ledger.coverage.durationSec, t, 1.5);
   const perception = added.length
-    ? await perceiveFrames(reviewId, dir, added, { intent: getReview(reviewId)!.intent, transcript: ledger.transcript })
+    ? await perceiveFrames(reviewId, dir, added, { intent: r.intent, transcript: ledger.transcript })
     : [];
   ledger.frames.push(...added);
   ledger.perception.push(...perception);
-  updateReview(reviewId, { ledger });
+  await updateReview(reviewId, { ledger });
+  // New frames join the stored record too.
+  if (r.userId && added.length) await enqueue(reviewId, "store");
   // Include frames already sampled in this window too.
   const window = ledger.frames.filter((f) => Math.abs(f.t - t) <= 1.5).sort((a, b) => a.t - b.t);
   const byId = new Map(ledger.perception.map((p) => [p.frameId, p]));
@@ -56,22 +65,23 @@ export async function POST(req: Request, ctx: RouteContext<"/api/reviews/[id]/ch
   const { id } = await ctx.params;
   const parsed = Body.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return Response.json({ error: "Invalid request" }, { status: 400 });
-  const r = getReview(id);
-  if (!r || !r.ledger) return Response.json({ error: "This review isn't ready yet." }, { status: 409 });
+  const r = (await accessibleReview(id))?.review;
+  if (!r) return Response.json({ error: "Not found" }, { status: 404 });
+  if (!r.ledger) return Response.json({ error: "This review isn't ready yet." }, { status: 409 });
   if (!r.board.includes(parsed.data.reviewerId)) return Response.json({ error: "That reviewer isn't on this panel." }, { status: 400 });
   const profile = getProfile(parsed.data.reviewerId);
   if (!profile) return Response.json({ error: "That reviewer is no longer available." }, { status: 400 });
 
   try {
-    assertCanAskFollowup(id);
+    await spendFollowup(clientKey(req.headers), id);
   } catch (e) {
     if (e instanceof LimitReached) return Response.json({ error: e.message }, { status: 429 });
     throw e;
   }
 
   const ledger = r.ledger;
-  const history = getThread(id, profile.id);
-  addMessage(id, profile.id, "user", parsed.data.message);
+  const history = await getThread(id, profile.id);
+  await addMessage(id, profile.id, "user", parsed.data.message);
 
   const system = followupSystem(profile, r.notes?.[profile.id], r.intent, ledger);
   const messages: Anthropic.Beta.BetaMessageParam[] = [
@@ -112,14 +122,14 @@ export async function POST(req: Request, ctx: RouteContext<"/api/reviews/[id]/ch
               continue;
             }
             send({ type: "inspecting", seconds: input.seconds });
-            results.push({ type: "tool_result", tool_use_id: block.id, content: await inspect(id, ledger, input.seconds, input.focus ?? "") });
+            results.push({ type: "tool_result", tool_use_id: block.id, content: await inspect(r, ledger, input.seconds, input.focus ?? "") });
           }
           messages.push({ role: "assistant", content: final.content });
           messages.push({ role: "user", content: results });
           full += "\n\n";
         }
         const cleaned = cleanCitations(full.trim(), ledger, principleIds);
-        addMessage(id, profile.id, "assistant", cleaned);
+        await addMessage(id, profile.id, "assistant", cleaned);
         send({ type: "done", text: cleaned });
       } catch (e) {
         const message =

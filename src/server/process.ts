@@ -8,6 +8,7 @@ import { perceiveFrames } from "@/ai/perceive";
 import { composeDiscussion, evidenceBlocks, reviewerPass, synthesize } from "@/ai/review";
 import { getProfile } from "@/experts/load";
 import { getReview, reviewDir, updateReview } from "./reviews";
+import { enqueue } from "./jobs";
 
 function originalFile(dir: string): string {
   const f = fs.readdirSync(dir).find((x) => x.startsWith("original."));
@@ -36,10 +37,10 @@ function coverage(p: { durationSec: number; width: number; height: number; hasAu
 }
 
 export async function processReview(id: string) {
-  const r = getReview(id);
+  const r = await getReview(id);
   if (!r) throw new Error(`Review ${id} not found`);
   const dir = reviewDir(id);
-  const stage = (stage: Parameters<typeof updateReview>[1]["stage"], stageDetail: string | null = null) =>
+  const stage = (stage: NonNullable<Parameters<typeof updateReview>[1]["stage"]>, stageDetail: string | null = null) =>
     updateReview(id, { stage, stageDetail });
 
   const board = r.board.map((rid) => getProfile(rid));
@@ -49,27 +50,27 @@ export async function processReview(id: string) {
   // 1. Media → ledger (skipped when resuming after a later-stage failure).
   let ledger = r.ledger;
   if (!ledger) {
-    stage("ingesting");
+    await stage("ingesting");
     const p = await probe(originalFile(dir));
     await normalize(dir, originalFile(dir), p);
 
-    stage("transcribing");
+    await stage("transcribing");
     const transcript = await transcribe(dir);
     if (transcript.length) writeCaptions(dir, transcript);
 
-    stage("sampling");
+    await stage("sampling");
     const shots = await detectShots(dir, p.durationSec);
     let frames = await sampleFrames(dir, p.durationSec, shots);
     // A closer look at the hook: 8 fps over the first second and a half.
     frames = [...frames, ...(await denseSample(dir, frames, shots, p.durationSec, 0.75, 0.75))];
     const signals = await audioSignals(dir, p.durationSec, transcript);
 
-    stage("perceiving", `${frames.length} frames`);
+    await stage("perceiving", `${frames.length} frames`);
     const perception = await perceiveFrames(id, dir, frames, { intent: r.intent, transcript });
 
     const partial = { shots, frames, transcript, ...signals, perception };
     ledger = { ...partial, coverage: coverage(p, partial) };
-    updateReview(id, { ledger });
+    await updateReview(id, { ledger });
   }
 
   // 2. Independent reviewer passes. The first warms the shared evidence cache, the rest run in parallel.
@@ -77,13 +78,13 @@ export async function processReview(id: string) {
   const validation = { ...(r.validation ?? {}) };
   const pending = profiles.filter((p) => !notes[p.id]);
   if (pending.length) {
-    stage("reviewing", `${Object.keys(notes).length} of ${profiles.length} done`);
+    await stage("reviewing", `${Object.keys(notes).length} of ${profiles.length} done`);
     const evidence = await evidenceBlocks(dir, ledger, r.intent);
     const runOne = async (p: (typeof profiles)[number]) => {
       const out = await reviewerPass(id, evidence, ledger!, p);
       notes[p.id] = out.notes;
       validation[p.id] = out.report;
-      updateReview(id, { notes, validation, stageDetail: `${Object.keys(notes).length} of ${profiles.length} done` });
+      await updateReview(id, { notes, validation, stageDetail: `${Object.keys(notes).length} of ${profiles.length} done` });
     };
     await runOne(pending[0]);
     await Promise.all(pending.slice(1).map(runOne));
@@ -92,17 +93,20 @@ export async function processReview(id: string) {
   // 3. Discussion and synthesis.
   let discussion = r.discussion;
   if (!discussion) {
-    stage("discussing");
+    await stage("discussing");
     const out = await composeDiscussion(id, ledger, r.intent, profiles, notes);
     discussion = out.turns;
     validation.discussion = out.report;
-    updateReview(id, { discussion, validation });
+    await updateReview(id, { discussion, validation });
   }
   if (!r.synthesis) {
-    stage("synthesizing");
+    await stage("synthesizing");
     const out = await synthesize(id, profiles, notes, discussion, ledger);
     validation.synthesis = out.report;
-    updateReview(id, { synthesis: out.synthesis, validation });
+    await updateReview(id, { synthesis: out.synthesis, validation });
   }
-  stage("done");
+  await stage("done");
+  // Signed-in owners keep a record: copy the media to storage. Re-read, since the
+  // review may have been claimed by a sign-in while it was processing.
+  if ((await getReview(id))?.userId) await enqueue(id, "store");
 }

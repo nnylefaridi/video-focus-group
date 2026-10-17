@@ -2,8 +2,8 @@
 import { spawn } from "node:child_process";
 
 const procs = [
-  // Bound to this computer only, so nobody else on your network can use your API key.
-  spawn("npx", ["next", "dev", "-H", "127.0.0.1"], { stdio: "inherit" }),
+  // Bound to this computer only (see server.mjs), so nobody else on your network can use your API key.
+  spawn("node", ["server.mjs", "--dev"], { stdio: "inherit" }),
   spawn("npx", ["tsx", "watch", "--env-file-if-exists=.env.local", "worker/index.mts"], { stdio: "inherit" }),
 ];
 const stop = () => procs.forEach((p) => p.kill("SIGINT"));

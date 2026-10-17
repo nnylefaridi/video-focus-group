@@ -1,63 +1,106 @@
-import Database from "better-sqlite3";
-import { DB_PATH } from "./config";
+import fs from "node:fs";
+import path from "node:path";
+
+/**
+ * The app's database: Supabase Postgres, reached with DATABASE_URL (the pooler
+ * connection string from the Supabase dashboard). Tests use an in-process Postgres
+ * instead (`DATABASE_URL=pglite:memory`), so they need no network or account.
+ *
+ * Migrations in supabase/migrations run automatically, once, on first use.
+ */
+export type Row = Record<string, unknown>;
+export type Query = <T = Row>(text: string, params?: unknown[]) => Promise<T[]>;
+type Tx = { q: Query; exec: (text: string) => Promise<void> };
+type Driver = { q: Query; tx: <T>(fn: (t: Tx) => Promise<T>) => Promise<T> };
 
 declare global {
-  var __panelDb: Database.Database | undefined;
+  var __panelDb: Promise<Driver> | undefined;
 }
 
-function open(): Database.Database {
-  const db = new Database(DB_PATH);
-  db.pragma("journal_mode = WAL");
-  db.pragma("busy_timeout = 5000");
-  db.pragma("foreign_keys = ON");
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS reviews (
-      id TEXT PRIMARY KEY,
-      created_at INTEGER NOT NULL,
-      updated_at INTEGER NOT NULL,
-      stage TEXT NOT NULL,
-      stage_detail TEXT,
-      error TEXT,
-      answers TEXT NOT NULL,
-      intent TEXT NOT NULL,
-      board TEXT NOT NULL,
-      title TEXT,
-      video TEXT,
-      ledger TEXT,
-      notes TEXT,
-      discussion TEXT,
-      synthesis TEXT,
-      validation TEXT,
-      cost TEXT NOT NULL DEFAULT '{"usd":0,"calls":[]}'
-    );
-    CREATE TABLE IF NOT EXISTS jobs (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      review_id TEXT NOT NULL REFERENCES reviews(id) ON DELETE CASCADE,
-      kind TEXT NOT NULL,
-      payload TEXT NOT NULL DEFAULT '{}',
-      status TEXT NOT NULL DEFAULT 'pending',
-      attempts INTEGER NOT NULL DEFAULT 0,
-      error TEXT,
-      created_at INTEGER NOT NULL,
-      started_at INTEGER,
-      finished_at INTEGER
-    );
-    CREATE INDEX IF NOT EXISTS jobs_status ON jobs(status, id);
-    CREATE TABLE IF NOT EXISTS followups (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      review_id TEXT NOT NULL REFERENCES reviews(id) ON DELETE CASCADE,
-      reviewer_id TEXT NOT NULL,
-      role TEXT NOT NULL,
-      content TEXT NOT NULL,
-      created_at INTEGER NOT NULL
-    );
-    CREATE INDEX IF NOT EXISTS followups_thread ON followups(review_id, reviewer_id, id);
-  `);
-  return db;
+export class NotConfigured extends Error {}
+
+async function postgresDriver(url: string): Promise<Driver> {
+  const { default: postgres } = await import("postgres");
+  // prepare: false works with both the session and transaction poolers. JSON values are
+  // passed as JSON text with a ::jsonb cast, so they must go through as-is, not be encoded again.
+  const sql = postgres(url, {
+    prepare: false,
+    max: 5,
+    idle_timeout: 30,
+    onnotice: () => {},
+    types: { json: { to: 3802, from: [114, 3802], serialize: (x: unknown) => (typeof x === "string" ? x : JSON.stringify(x)), parse: (x: string) => JSON.parse(x) } },
+  });
+  const q: Query = async (text, params = []) => (await sql.unsafe(text, params as never[])) as never;
+  return {
+    q,
+    tx: async (fn) =>
+      (await sql.begin((t) =>
+        fn({
+          q: async (text, params = []) => (await t.unsafe(text, params as never[])) as never,
+          exec: async (text) => void (await t.unsafe(text).simple()),
+        }),
+      )) as never,
+  };
 }
 
-/** One connection per process (survives dev hot reloads). */
-export function db(): Database.Database {
-  globalThis.__panelDb ??= open();
+async function pgliteDriver(where: string): Promise<Driver> {
+  const { PGlite } = await import(/* turbopackIgnore: true */ "@electric-sql/pglite");
+  const pg = where === "memory" ? new PGlite() : new PGlite(path.resolve(where));
+  const q: Query = async (text, params = []) => (await pg.query(text, params)).rows as never;
+  return {
+    q,
+    tx: (fn) =>
+      pg.transaction((t) =>
+        fn({
+          q: async (text, params = []) => (await t.query(text, params)).rows as never,
+          exec: async (text) => void (await t.exec(text)),
+        }),
+      ),
+  };
+}
+
+const MIGRATIONS = path.join(/* turbopackIgnore: true */ process.cwd(), "supabase", "migrations");
+
+async function migrate(d: Driver) {
+  await d.tx(async (t) => {
+    // Web app and worker may start at once; only one applies migrations.
+    await t.q("select pg_advisory_xact_lock(724100)");
+    await t.exec(
+      "create schema if not exists app; create table if not exists app.migrations (name text primary key, at bigint not null); alter table app.migrations enable row level security",
+    );
+    const done = new Set((await t.q<{ name: string }>("select name from app.migrations")).map((r) => r.name));
+    for (const name of fs.readdirSync(MIGRATIONS).filter((f) => f.endsWith(".sql")).sort()) {
+      if (done.has(name)) continue;
+      await t.exec(fs.readFileSync(path.join(MIGRATIONS, name), "utf8"));
+      await t.q("insert into app.migrations (name, at) values ($1, $2)", [name, Date.now()]);
+    }
+  });
+}
+
+async function open(): Promise<Driver> {
+  const url = process.env.DATABASE_URL;
+  if (!url) throw new NotConfigured("DATABASE_URL is not set. Add your Supabase database connection string to .env.local (see README) and restart.");
+  const d = url.startsWith("pglite:") ? await pgliteDriver(url.slice("pglite:".length)) : await postgresDriver(url);
+  await migrate(d);
+  return d;
+}
+
+/** One connection pool per process (survives dev hot reloads). */
+function driver(): Promise<Driver> {
+  globalThis.__panelDb ??= open().catch((e) => {
+    globalThis.__panelDb = undefined;
+    throw e;
+  });
   return globalThis.__panelDb;
+}
+
+export const q: Query = async (text, params) => (await driver()).q(text, params);
+
+export async function one<T = Row>(text: string, params?: unknown[]): Promise<T | null> {
+  return (await q<T>(text, params))[0] ?? null;
+}
+
+/** A transaction. `lock(key)` serializes everything else holding the same key until commit. */
+export async function tx<T>(fn: (t: Query, lock: (key: string) => Promise<void>) => Promise<T>): Promise<T> {
+  return (await driver()).tx((t) => fn(t.q, async (key) => void (await t.q("select pg_advisory_xact_lock(hashtext($1))", [key]))));
 }

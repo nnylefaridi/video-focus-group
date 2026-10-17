@@ -7,7 +7,13 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
-import { beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
+
+// The upload belongs to the browser that started the review (identified by its cookie).
+const ANON = "a".repeat(32);
+vi.mock("next/headers", () => ({
+  cookies: async () => ({ get: (name: string) => (name === "panel_anon" ? { value: ANON } : undefined), getAll: () => [], set: () => {} }),
+}));
 
 const DATA = fs.mkdtempSync(path.join(os.tmpdir(), "panel-test-"));
 process.env.DATA_DIR = DATA;
@@ -16,7 +22,7 @@ const FILES = fs.mkdtempSync(path.join(os.tmpdir(), "panel-files-"));
 type Mods = {
   PUT: (req: Request, ctx: { params: Promise<{ id: string }> }) => Promise<Response>;
   reviews: typeof import("@/server/reviews");
-  jobs: typeof import("@/server/db");
+  db: typeof import("@/server/db");
 };
 let m: Mods;
 
@@ -30,12 +36,12 @@ beforeAll(async () => {
   ff(["-f", "lavfi", "-i", "sine=frequency=440:duration=3", "-c:a", "aac", path.join(FILES, "audio.m4a")]);
   fs.writeFileSync(path.join(FILES, "fake.mp4"), "this is just text pretending to be a video".repeat(20));
   const route = await import("@/app/api/reviews/[id]/video/route");
-  m = { PUT: route.PUT as Mods["PUT"], reviews: await import("@/server/reviews"), jobs: await import("@/server/db") };
+  m = { PUT: route.PUT as Mods["PUT"], reviews: await import("@/server/reviews"), db: await import("@/server/db") };
 });
 
-function newReview() {
+async function newReview(anonId = ANON) {
   const id = m.reviews.newReviewId();
-  m.reviews.createReview({ id, answers: [], intent: { category: "creator" }, board: ["mrbeast"], title: "test" });
+  await m.reviews.createReview({ id, answers: [], intent: { category: "creator" }, board: ["mrbeast"], title: "test", anonId });
   return id;
 }
 
@@ -52,44 +58,44 @@ async function upload(id: string, file: string, headers: Record<string, string> 
 
 describe("video upload", () => {
   it("accepts a real video, stores it outside public/, and queues processing", async () => {
-    const id = newReview();
+    const id = await newReview();
     const r = await upload(id, path.join(FILES, "ok.mov"));
     expect(r.status).toBe(200);
-    const rec = m.reviews.getReview(id)!;
+    const rec = (await m.reviews.getReview(id))!;
     expect(rec.stage).toBe("queued");
     expect(rec.video?.durationSec).toBeCloseTo(3, 0);
     expect(rec.video?.hasAudio).toBe(true);
     expect(fs.existsSync(path.join(DATA, "media", id, "original.mp4"))).toBe(true);
-    const job = m.jobs.db().prepare("SELECT kind, status FROM jobs WHERE review_id = ?").get(id);
+    const job = await m.db.one("SELECT kind, status FROM app.jobs WHERE review_id = $1", [id]);
     expect(job).toEqual({ kind: "process", status: "pending" });
   });
 
   it("rejects a text file renamed to .mp4 and cleans up", async () => {
-    const id = newReview();
+    const id = await newReview();
     const r = await upload(id, path.join(FILES, "fake.mp4"));
     expect(r.status).toBe(400);
     expect(r.body.error).toMatch(/isn't an MP4, MOV or WebM/);
-    expect(m.reviews.getReview(id)).toBeNull();
+    expect(await m.reviews.getReview(id)).toBeNull();
     expect(fs.existsSync(path.join(DATA, "media", id))).toBe(false);
   });
 
   it("rejects a video longer than 3 minutes", async () => {
-    const id = newReview();
+    const id = await newReview();
     const r = await upload(id, path.join(FILES, "long.mp4"));
     expect(r.status).toBe(400);
     expect(r.body.error).toMatch(/limit is 3 minutes/);
-    expect(m.reviews.getReview(id)).toBeNull();
+    expect(await m.reviews.getReview(id)).toBeNull();
   });
 
   it("rejects an audio-only file", async () => {
-    const id = newReview();
+    const id = await newReview();
     const r = await upload(id, path.join(FILES, "audio.m4a"));
     expect(r.status).toBe(400);
     expect(r.body.error).toMatch(/doesn't contain a video track/);
   });
 
   it("rejects a declared size over 250 MB before reading it", async () => {
-    const id = newReview();
+    const id = await newReview();
     const req = new Request(`http://localhost/api/reviews/${id}/video`, {
       method: "PUT",
       body: "x",
@@ -97,20 +103,27 @@ describe("video upload", () => {
     });
     const res = await m.PUT(req, { params: Promise.resolve({ id }) });
     expect(res.status).toBe(413);
-    expect(m.reviews.getReview(id)).toBeNull();
+    expect(await m.reviews.getReview(id)).toBeNull();
   });
 
   it("refuses a second upload to the same review", async () => {
-    const id = newReview();
+    const id = await newReview();
     await upload(id, path.join(FILES, "ok.mov"));
     const again = await upload(id, path.join(FILES, "ok.mov"));
     expect(again.status).toBe(409);
   });
 
-  it("removes uploads that were abandoned mid-way", () => {
-    const id = newReview();
-    m.jobs.db().prepare("UPDATE reviews SET created_at = ? WHERE id = ?").run(Date.now() - 2 * 3600 * 1000, id);
-    expect(m.reviews.cleanupAbandonedUploads()).toBeGreaterThanOrEqual(1);
-    expect(m.reviews.getReview(id)).toBeNull();
+  it("won't take an upload for a review another browser started", async () => {
+    const id = await newReview("b".repeat(32));
+    const r = await upload(id, path.join(FILES, "ok.mov"));
+    expect(r.status).toBe(404);
+    expect((await m.reviews.getReview(id))!.stage).toBe("uploading");
+  });
+
+  it("removes uploads that were abandoned mid-way", async () => {
+    const id = await newReview();
+    await m.db.q("UPDATE app.reviews SET created_at = $1 WHERE id = $2", [Date.now() - 2 * 3600 * 1000, id]);
+    expect(await m.reviews.cleanupAbandonedUploads()).toBeGreaterThanOrEqual(1);
+    expect(await m.reviews.getReview(id)).toBeNull();
   });
 });

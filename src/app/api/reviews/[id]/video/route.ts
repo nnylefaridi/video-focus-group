@@ -4,7 +4,8 @@ import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { Transform } from "node:stream";
 import { LIMITS } from "@/server/config";
-import { deleteReview, getReview, reviewDir, updateReview } from "@/server/reviews";
+import { deleteReview, reviewDir, updateReview } from "@/server/reviews";
+import { accessibleReview } from "@/server/auth";
 import { enqueue } from "@/server/jobs";
 import { probe, sniffContainer, UploadRejected } from "@/media/probe";
 
@@ -12,13 +13,14 @@ class TooLarge extends Error {}
 
 export async function PUT(req: Request, ctx: RouteContext<"/api/reviews/[id]/video">) {
   const { id } = await ctx.params;
-  const review = getReview(id);
+  const review = (await accessibleReview(id))?.review;
   if (!review) return Response.json({ error: "Not found" }, { status: 404 });
   if (review.stage !== "uploading") return Response.json({ error: "This review already has a video." }, { status: 409 });
 
   const declared = Number(req.headers.get("content-length") ?? 0);
-  const reject = (message: string, status = 400) => {
-    deleteReview(id);
+  // A rejected upload never became a review, so it doesn't count toward today's limit.
+  const reject = async (message: string, status = 400) => {
+    await deleteReview(id, { refund: true });
     return Response.json({ error: message }, { status });
   };
   if (declared > LIMITS.maxBytes) return reject("That file is larger than 250 MB.", 413);
@@ -45,11 +47,11 @@ export async function PUT(req: Request, ctx: RouteContext<"/api/reviews/[id]/vid
     fs.renameSync(tmp, original);
 
     const name = decodeURIComponent(req.headers.get("x-file-name") ?? "video").slice(0, 200);
-    updateReview(id, {
+    await updateReview(id, {
       stage: "queued",
       video: { originalName: name, bytes, durationSec: meta.durationSec, width: meta.width, height: meta.height, hasAudio: meta.hasAudio },
     });
-    enqueue(id, "process");
+    await enqueue(id, "process");
     return Response.json({ ok: true });
   } catch (e) {
     if (e instanceof TooLarge) return reject("That file is larger than 250 MB.", 413);

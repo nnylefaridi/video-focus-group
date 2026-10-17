@@ -3,7 +3,8 @@ import { QUESTION_BY_ID } from "@/core/questionnaire/graph";
 import { resolve, type Answer } from "@/core/questionnaire/engine";
 import { interpretAnswer } from "@/ai/interpret";
 import { AiUnavailable, BudgetExceeded } from "@/ai/client";
-import { assertCanInterpret, LimitReached } from "@/server/budget";
+import { spendAnswerCheck, LimitReached } from "@/server/budget";
+import { clientKey } from "@/server/client";
 
 const Body = z.object({
   questionId: z.string(),
@@ -20,7 +21,7 @@ export async function POST(req: Request) {
   // Earlier answers, minus the one being (re)answered.
   const earlier = (parsed.data.answers as Answer[]).filter((a) => a.questionId !== q.id);
   try {
-    assertCanInterpret();
+    await spendAnswerCheck(clientKey(req.headers));
   } catch (e) {
     if (e instanceof LimitReached) return Response.json({ error: e.message }, { status: 429 });
     throw e;

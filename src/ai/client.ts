@@ -49,15 +49,15 @@ type CallOpts<S extends z.ZodType> = {
 };
 
 /** Checked before every paid call: app-wide daily/monthly caps, then this review's own cap. */
-function checkBudget(reviewId?: string) {
+async function checkBudget(reviewId?: string) {
   try {
-    assertWithinSpendLimits();
+    await assertWithinSpendLimits();
   } catch (e) {
     if (e instanceof LimitReached) throw new BudgetExceeded(e.message);
     throw e;
   }
   if (!reviewId) return;
-  const r = getReview(reviewId);
+  const r = await getReview(reviewId);
   if (r && r.cost.usd >= COST_CAP_USD) {
     throw new BudgetExceeded(`This review reached its $${COST_CAP_USD.toFixed(2)} spending cap.`);
   }
@@ -68,7 +68,7 @@ function checkBudget(reviewId?: string) {
  * the result against the zod schema, records cost against the review.
  */
 export async function callStructured<S extends z.ZodType>(opts: CallOpts<S>): Promise<z.infer<S>> {
-  checkBudget(opts.reviewId);
+  await checkBudget(opts.reviewId);
   const useFallbacks = opts.model !== MODELS.fast;
   const stream = anthropic().beta.messages.stream({
     model: opts.model,
@@ -80,9 +80,9 @@ export async function callStructured<S extends z.ZodType>(opts: CallOpts<S>): Pr
   });
   const msg = await stream.finalMessage();
   const usd = priceOf(opts.model, msg.usage);
-  recordSpend({ label: opts.label, model: opts.model, usd, reviewId: opts.reviewId });
+  await recordSpend({ label: opts.label, model: opts.model, usd, reviewId: opts.reviewId });
   if (opts.reviewId) {
-    addCost(opts.reviewId, { label: opts.label, model: opts.model, usd, inTok: msg.usage.input_tokens, outTok: msg.usage.output_tokens });
+    await addCost(opts.reviewId, { label: opts.label, model: opts.model, usd, inTok: msg.usage.input_tokens, outTok: msg.usage.output_tokens });
   }
   if (msg.stop_reason === "refusal") throw new Error(`${opts.label}: the model declined this request.`);
   if (msg.stop_reason === "max_tokens") throw new Error(`${opts.label}: response was cut off (max_tokens).`);
@@ -92,7 +92,7 @@ export async function callStructured<S extends z.ZodType>(opts: CallOpts<S>): Pr
 
 /** Streaming plain-text call used for follow-up chat. Yields text deltas. */
 export async function* streamText(opts: Omit<CallOpts<z.ZodType>, "schema"> & { tools?: Anthropic.Beta.BetaToolUnion[] }) {
-  checkBudget(opts.reviewId);
+  await checkBudget(opts.reviewId);
   const stream = anthropic().beta.messages.stream({
     model: opts.model,
     max_tokens: opts.maxTokens ?? 8000,
@@ -107,9 +107,9 @@ export async function* streamText(opts: Omit<CallOpts<z.ZodType>, "schema"> & { 
     if (ev.type === "content_block_delta" && ev.delta.type === "text_delta") yield { type: "text" as const, text: ev.delta.text };
   }
   const msg = await stream.finalMessage();
-  recordSpend({ label: opts.label, model: opts.model, usd: priceOf(opts.model, msg.usage), reviewId: opts.reviewId });
+  await recordSpend({ label: opts.label, model: opts.model, usd: priceOf(opts.model, msg.usage), reviewId: opts.reviewId });
   if (opts.reviewId) {
-    addCost(opts.reviewId, {
+    await addCost(opts.reviewId, {
       label: opts.label,
       model: opts.model,
       usd: priceOf(opts.model, msg.usage),

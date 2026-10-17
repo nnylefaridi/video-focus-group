@@ -1,25 +1,59 @@
 import Link from "next/link";
 import { Suspense } from "react";
+import { headers } from "next/headers";
 import { connection } from "next/server";
-import { listReviews } from "@/server/reviews";
+import { listReviewsFor } from "@/server/reviews";
 import { getProfile } from "@/experts/load";
 import { STAGE_LABELS } from "@/core/review";
-import { spendSummary } from "@/server/budget";
+import { spendSummary, usageFor } from "@/server/budget";
+import { claimForViewer, getViewer } from "@/server/auth";
+import { clientKey } from "@/server/client";
+import { SignOut } from "@/components/account/SignOut";
 
-async function Spend() {
-  await connection();
-  const s = spendSummary();
-  const m = (n: number) => `$${n.toFixed(2)}`;
+const isOwner = (email: string | null) =>
+  Boolean(email && (process.env.OWNER_EMAILS ?? "").split(",").map((e) => e.trim().toLowerCase()).includes(email.toLowerCase()));
+
+function Meter({ label, used, max, note }: { label: string; used: number; max: number; note: string }) {
+  const left = Math.max(0, max - used);
   return (
-    <p className="mt-3 text-sm font-semibold text-ink-soft">
-      API spend: {m(s.today)} of {m(s.dailyLimit)} today · {m(s.month)} of {m(s.monthlyLimit)} this month
-    </p>
+    <div>
+      <div className="flex items-baseline justify-between gap-3 text-sm">
+        <span className="font-bold text-ink">{label}</span>
+        <span className="font-semibold text-ink-soft">
+          {Math.min(used, max)} of {max} used
+        </span>
+      </div>
+      <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-paper-deep" role="meter" aria-label={label} aria-valuemin={0} aria-valuemax={max} aria-valuenow={Math.min(used, max)}>
+        <div className={`h-full rounded-full ${left === 0 ? "bg-warn" : "bg-accent"}`} style={{ width: `${Math.min(100, (used / max) * 100)}%` }} />
+      </div>
+      <p className="mt-1 text-xs text-ink-faint">{note}</p>
+    </div>
   );
 }
 
-async function List() {
-  await connection();
-  const reviews = listReviews().filter((r) => r.stage !== "uploading");
+async function Usage({ email }: { email: string | null }) {
+  const u = await usageFor(clientKey(await headers()));
+  const owner = isOwner(email) ? await spendSummary() : null;
+  const m = (n: number) => `$${n.toFixed(2)}`;
+  return (
+    <section aria-labelledby="usage" className="cutout mt-6 space-y-4 p-5">
+      <h2 id="usage" className="font-display text-lg font-extrabold text-ink">
+        Your limits
+      </h2>
+      <Meter label="Reviews today" used={u.reviewsToday} max={u.maxReviewsPerDay} note="Resets at midnight." />
+      <Meter label="Answers checked this hour" used={u.answerChecksLastHour} max={u.maxAnswerChecksPerHour} note="Counts the last 60 minutes." />
+      <p className="text-sm text-ink-soft">Each review can take up to {u.maxFollowupsPerReview} follow-up questions.</p>
+      {owner && (
+        <p className="border-t border-line pt-3 text-sm font-semibold text-ink-soft">
+          App API spend: {m(owner.today)} of {m(owner.dailyLimit)} today · {m(owner.month)} of {m(owner.monthlyLimit)} this month
+        </p>
+      )}
+    </section>
+  );
+}
+
+async function List({ userId }: { userId: string }) {
+  const reviews = (await listReviewsFor(userId)).filter((r) => r.stage !== "uploading");
   if (reviews.length === 0) {
     return (
       <p className="mt-8 text-ink-soft">
@@ -60,6 +94,39 @@ async function List() {
   );
 }
 
+/** Signed out: explain why an account is needed, and send them to log in. */
+function LoginGate() {
+  return (
+    <div className="cutout-lift mt-8 -rotate-[0.3deg] p-6 sm:p-8">
+      <h2 className="font-display text-xl font-extrabold text-ink">Log in to keep a record of your reviews</h2>
+      <p className="mt-2 text-ink-soft">
+        Without an account, a review stays with the browser that made it and isn&apos;t listed anywhere. Log in or sign up, and the reviews you&apos;ve made in this browser, with their videos, move into your account.
+      </p>
+      <Link href="/login?next=/reviews" className="mt-5 inline-block rounded-full bg-accent px-6 py-2.5 font-bold text-accent-ink transition-all hover:brightness-110">
+        Log in or sign up
+      </Link>
+    </div>
+  );
+}
+
+async function Account() {
+  // Limits depend on the current time, so this always renders per request.
+  await connection();
+  const viewer = await getViewer();
+  if (!viewer.userId) return <LoginGate />;
+  await claimForViewer(viewer);
+  return (
+    <>
+      <p className="mt-2 text-sm text-ink-soft">
+        {viewer.email ? <>Signed in as {viewer.email} · </> : null}
+        <SignOut />
+      </p>
+      <Usage email={viewer.email} />
+      <List userId={viewer.userId} />
+    </>
+  );
+}
+
 export default function ReviewsPage() {
   return (
     <main className="mx-auto w-full max-w-2xl px-4 py-12 sm:py-16">
@@ -69,9 +136,8 @@ export default function ReviewsPage() {
           New review
         </Link>
       </div>
-      <Suspense>
-        <Spend />
-        <List />
+      <Suspense fallback={<p className="mt-8 animate-pulse font-semibold text-ink-soft">Opening your reviews…</p>}>
+        <Account />
       </Suspense>
     </main>
   );

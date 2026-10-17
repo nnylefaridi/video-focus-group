@@ -4,10 +4,10 @@
   "private": true,
   "scripts": {
     "dev": "node scripts/dev.mjs",
-    "dev:web": "next dev -H 127.0.0.1",
+    "dev:web": "node server.mjs --dev",
     "worker": "tsx --env-file-if-exists=.env.local worker/index.mts",
     "build": "next build",
-    "start": "next start -H 127.0.0.1",
+    "start": "NODE_ENV=production node server.mjs",
     "lint": "eslint",
     "typecheck": "next typegen && tsc --noEmit",
     "test": "vitest run",
@@ -15,15 +15,19 @@
     "kb:validate": "tsx scripts/kb-validate.mts",
     "check": "npm run typecheck && npm run lint && npm run test && npm run lint:design && npm run kb:validate",
     "e2e": "playwright test",
-    "eval": "tsx scripts/eval.mts",
-    "smoke": "tsx --env-file-if-exists=.env.local scripts/smoke-review.mts"
+    "eval": "tsx --env-file-if-exists=.env.local scripts/eval.mts",
+    "smoke": "tsx --env-file-if-exists=.env.local scripts/smoke-review.mts",
+    "db:import-local": "tsx --env-file-if-exists=.env.local scripts/import-local.mts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.135.0",
+    "@supabase/ssr": "^0.12.7",
+    "@supabase/supabase-js": "^2.118.0",
     "better-sqlite3": "^13.0.3",
     "motion": "^14.3.0",
     "nanoid": "^6.0.2",
     "next": "16.4.2",
+    "postgres": "^3.4.9",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "server-only": "^0.0.1",
@@ -32,6 +36,7 @@
     "zod": "^4.6.7"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.10",
     "@playwright/test": "^1.64.1",
     "@tailwindcss/turbopack": "^4",
     "@types/better-sqlite3": "^9.6.0",

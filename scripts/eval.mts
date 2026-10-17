@@ -10,7 +10,7 @@
  */
 import fs from "node:fs";
 import path from "node:path";
-import { db } from "../src/server/db";
+import { q } from "../src/server/db";
 import { getReview, type ReviewRecord } from "../src/server/reviews";
 import { deriveSpan } from "../src/core/evidence";
 import { getProfile } from "../src/experts/load";
@@ -21,10 +21,12 @@ const GENERIC = /\b(know your audience|make it (more )?engaging|be (more )?authe
 
 const ids = process.argv.slice(2);
 const reviews: ReviewRecord[] = (
-  ids.length ? ids : (db().prepare("SELECT id FROM reviews WHERE stage = 'done' ORDER BY created_at").all() as { id: string }[]).map((r) => r.id)
-)
-  .map((id) => getReview(id))
-  .filter((r): r is ReviewRecord => r !== null && r.stage === "done");
+  await Promise.all(
+    (ids.length ? ids : (await q<{ id: string }>("SELECT id FROM app.reviews WHERE stage = 'done' ORDER BY created_at")).map((r) => r.id)).map((id) =>
+      getReview(id),
+    ),
+  )
+).filter((r): r is ReviewRecord => r !== null && r.stage === "done");
 
 if (reviews.length === 0) {
   console.log("No finished reviews to evaluate yet.");
