@@ -1,0 +1,14 @@
+node_modules
+.next
+data
+.env*
+!.env.example
+Cutouts
+cutouts.jpeg
+test-results
+playwright-report
+tests/eval/out
+*.tsbuildinfo
+.git
+.claude
+Paper-Cutout Video Review Boardroom.png

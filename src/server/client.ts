@@ -40,3 +40,15 @@ export function normalizeIp(ip: string): string {
 export function clientKey(headers: Headers): string {
   return crypto.createHmac("sha256", MEDIA_SECRET).update(`ip:${clientIp(headers)}`).digest("base64url").slice(0, 32);
 }
+
+/**
+ * Whose allowance a request uses. Signed in: the account's own, so people sharing a
+ * school or office network don't share one allowance. Signed out: the network's.
+ * Every use also counts toward the network's overall ceiling.
+ */
+export type Who = { person: string; network: string; signedIn: boolean };
+
+export function whoIsCalling(headers: Headers, userId: string | null): Who {
+  const network = clientKey(headers);
+  return userId ? { person: `user:${userId}`, network, signedIn: true } : { person: network, network, signedIn: false };
+}

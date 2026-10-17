@@ -6,6 +6,7 @@ import type { QuestionNode } from "@/core/questionnaire/graph";
 import type { Answer } from "@/core/questionnaire/engine";
 import type { IntentFields } from "@/core/intent";
 import { ArrowLeft, ArrowUp, Spinner } from "../Icons";
+import { LoginHint } from "./LoginHint";
 
 type Props = {
   question: QuestionNode;
@@ -71,6 +72,7 @@ function TextAnswer({ question, answers, existing, onSubmit }: Omit<Props, "onBa
   const [touched, setTouched] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [loginHelps, setLoginHelps] = useState(false);
   const ref = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
@@ -90,10 +92,14 @@ function TextAnswer({ question, answers, existing, onSubmit }: Omit<Props, "onBa
     if (!raw || busy) return;
     setBusy(true);
     setError(null);
+    setLoginHelps(false);
     try {
       const res = await fetch("/api/interpret", { method: "POST", body: JSON.stringify({ questionId: question.id, raw, answers }) });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Something went wrong.");
+      if (!res.ok) {
+        setLoginHelps(Boolean(data.login));
+        throw new Error(data.error ?? "Something went wrong.");
+      }
       onSubmit({ questionId: question.id, display: raw, fields: data.fields });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Something went wrong.");
@@ -166,6 +172,7 @@ function TextAnswer({ question, answers, existing, onSubmit }: Omit<Props, "onBa
       {error && (
         <p role="alert" className="mt-3 rounded-xl bg-warn-soft px-4 py-2.5 text-sm text-warn">
           {error}
+          {loginHelps && <LoginHint />}
         </p>
       )}
     </div>

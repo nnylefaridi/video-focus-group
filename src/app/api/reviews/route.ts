@@ -4,9 +4,9 @@ import { isComplete, resolve, type Answer } from "@/core/questionnaire/engine";
 import { liveProfiles } from "@/experts/load";
 import { listReviewsFor, newReviewId } from "@/server/reviews";
 import { hasAnthropicKey } from "@/server/config";
-import { startReview, LimitReached } from "@/server/budget";
+import { startReview, LimitReached, limitResponse } from "@/server/budget";
 import { ensureAnonId, getViewer } from "@/server/auth";
-import { clientKey } from "@/server/client";
+import { whoIsCalling } from "@/server/client";
 
 const Body = z.object({
   answers: z.array(z.object({ questionId: z.string(), display: z.string(), fields: z.record(z.string(), z.unknown()), skipped: z.boolean().optional() })),
@@ -42,9 +42,9 @@ export async function POST(req: Request) {
   const id = newReviewId();
   const title = (fields.summary ?? "Untitled video").slice(0, 120);
   try {
-    await startReview(clientKey(req.headers), { id, answers: active, intent: fields, board, title, userId: viewer.userId, anonId });
+    await startReview(whoIsCalling(req.headers, viewer.userId), { id, answers: active, intent: fields, board, title, userId: viewer.userId, anonId });
   } catch (e) {
-    if (e instanceof LimitReached) return Response.json({ error: e.message }, { status: 429 });
+    if (e instanceof LimitReached) return limitResponse(e);
     throw e;
   }
   return Response.json({ id });

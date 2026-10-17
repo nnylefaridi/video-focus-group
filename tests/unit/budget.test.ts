@@ -14,6 +14,8 @@ process.env.MONTHLY_LIMIT_USD = "3";
 process.env.MAX_REVIEWS_PER_DAY = "2";
 process.env.MAX_FOLLOWUPS_PER_REVIEW = "2";
 process.env.MAX_ANSWER_CHECKS_PER_HOUR = "3";
+process.env.MAX_REVIEWS_PER_NETWORK_PER_DAY = "3";
+process.env.MAX_ANSWER_CHECKS_PER_NETWORK_PER_HOUR = "5";
 
 let b: typeof import("@/server/budget");
 let r: typeof import("@/server/reviews");
@@ -29,9 +31,12 @@ beforeAll(async () => {
 
 // What server.mjs does: the connection's address under a per-run header name.
 process.env.PANEL_PEER_HEADER = "x-panel-peer-test";
-const ip = (addr: string) => c.clientKey(new Headers({ "x-panel-peer-test": addr }));
+const peer = (addr: string) => new Headers({ "x-panel-peer-test": addr });
+/** Someone signed out on this network, or signed in to this account on it. */
+const ip = (addr: string) => c.whoIsCalling(peer(addr), null);
+const account = (addr: string, userId: string) => c.whoIsCalling(peer(addr), userId);
 
-function start(key: string, owner: { userId?: string | null; anonId?: string | null } = {}) {
+function start(key: import("@/server/client").Who, owner: { userId?: string | null; anonId?: string | null } = {}) {
   const id = r.newReviewId();
   return b
     .startReview(key, { id, answers: [], intent: { category: "creator" }, board: ["mrbeast"], title: "t", userId: owner.userId ?? null, anonId: owner.anonId ?? null })
@@ -62,9 +67,10 @@ describe("who counts as one person", () => {
   });
 
   it("never stores the address itself", () => {
-    expect(ip("203.0.113.9")).not.toContain("203");
-    expect(ip("203.0.113.9")).toBe(ip("203.0.113.9"));
-    expect(ip("203.0.113.9")).not.toBe(ip("203.0.113.10"));
+    const key = (addr: string) => c.clientKey(peer(addr));
+    expect(key("203.0.113.9")).not.toContain("203");
+    expect(key("203.0.113.9")).toBe(key("203.0.113.9"));
+    expect(key("203.0.113.9")).not.toBe(key("203.0.113.10"));
   });
 });
 
@@ -81,7 +87,7 @@ describe("per-person limits", () => {
     const results = await Promise.allSettled(Array.from({ length: 6 }, () => start(a)));
     expect(results.filter((x) => x.status === "fulfilled")).toHaveLength(2);
     const refused = results.find((x) => x.status === "rejected") as PromiseRejectedResult;
-    expect(refused.reason.message).toMatch(/daily limit/);
+    expect(refused.reason.message).toMatch(/used today's reviews/);
     expect((await b.usageFor(a)).reviewsToday).toBe(2);
   });
 
@@ -92,7 +98,7 @@ describe("per-person limits", () => {
     await r.deleteReview(first, { refund: true });
     const third = await start(a);
     await r.deleteReview(third);
-    await expect(start(a)).rejects.toThrow(/daily limit/);
+    await expect(start(a)).rejects.toThrow(/used today's reviews/);
   });
 
   it("caps follow-up questions per review, even when sent in parallel", async () => {
@@ -102,6 +108,41 @@ describe("per-person limits", () => {
     expect(results.filter((x) => x.status === "fulfilled")).toHaveLength(2);
     await expect(b.spendFollowup(a, id)).rejects.toThrow(/limit of 2 follow-up/);
     expect(await b.followupsUsed(id)).toBe(2);
+  });
+});
+
+describe("shared networks (schools, offices)", () => {
+  it("gives each signed-in person their own allowance, under one ceiling for the whole network", async () => {
+    const net = "198.51.100.20";
+    await start(ip(net));
+    await start(ip(net));
+    // Signed out, the network's allowance is used up, and logging in is the way forward.
+    const signedOut = await start(ip(net)).catch((e) => e);
+    expect(signedOut.message).toMatch(/Log in to get your own daily reviews/);
+    expect(signedOut.loginHelps).toBe(true);
+    // Signed in on the same network: their own allowance...
+    await expect(start(account(net, "a1"))).resolves.toBeTruthy();
+    // ...until the network as a whole reaches its ceiling (3 in this test).
+    const ceiling = await start(account(net, "b2")).catch((e) => e);
+    expect(ceiling.message).toMatch(/your network today/);
+    expect(ceiling.loginHelps).toBe(false);
+    expect((await b.usageFor(account(net, "a1"))).reviewsToday).toBe(1);
+    expect((await b.usageFor(account(net, "b2"))).reviewsToday).toBe(0);
+  });
+
+  it("does the same for answer checks", async () => {
+    const net = "198.51.100.21";
+    for (let i = 0; i < 3; i++) await b.spendAnswerCheck(ip(net));
+    await expect(b.spendAnswerCheck(ip(net))).rejects.toMatchObject({ loginHelps: true });
+    await b.spendAnswerCheck(account(net, "c3"));
+    await b.spendAnswerCheck(account(net, "c3"));
+    await expect(b.spendAnswerCheck(account(net, "d4"))).rejects.toThrow(/Your network has sent too many answers/);
+  });
+
+  it("follows a signed-in person across networks", async () => {
+    await start(account("198.51.100.22", "e5"));
+    await start(account("198.51.100.23", "e5"));
+    await expect(start(account("198.51.100.24", "e5"))).rejects.toThrow(/daily limit/);
   });
 });
 

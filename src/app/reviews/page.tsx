@@ -7,7 +7,7 @@ import { getProfile } from "@/experts/load";
 import { STAGE_LABELS } from "@/core/review";
 import { spendSummary, usageFor } from "@/server/budget";
 import { claimForViewer, getViewer } from "@/server/auth";
-import { clientKey } from "@/server/client";
+import { whoIsCalling } from "@/server/client";
 import { SignOut } from "@/components/account/SignOut";
 
 const isOwner = (email: string | null) =>
@@ -31,8 +31,8 @@ function Meter({ label, used, max, note }: { label: string; used: number; max: n
   );
 }
 
-async function Usage({ email }: { email: string | null }) {
-  const u = await usageFor(clientKey(await headers()));
+async function Usage({ email, userId }: { email: string | null; userId: string }) {
+  const u = await usageFor(whoIsCalling(await headers(), userId));
   const owner = isOwner(email) ? await spendSummary() : null;
   const m = (n: number) => `$${n.toFixed(2)}`;
   return (
@@ -121,7 +121,7 @@ async function Account() {
         {viewer.email ? <>Signed in as {viewer.email} · </> : null}
         <SignOut />
       </p>
-      <Usage email={viewer.email} />
+      <Usage email={viewer.email} userId={viewer.userId} />
       <List userId={viewer.userId} />
     </>
   );

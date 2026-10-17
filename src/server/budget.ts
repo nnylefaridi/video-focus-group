@@ -1,16 +1,30 @@
 import { q, tx, type Query } from "./db";
 import { SPEND_LIMITS } from "./config";
 import { INSERT_REVIEW, insertReviewParams } from "./reviews";
+import type { Who } from "./client";
 
 /**
  * Two layers of protection for the API key:
  * - App-wide daily and monthly caps on what every paid call (reviews, answer
  *   checks, follow-ups) costs, from one log of those calls.
- * - Per-person limits keyed by IP address (see client.ts). Each use is reserved
- *   before the paid work starts, inside a lock on that person's key, so tabs
- *   racing each other can't get past a limit.
+ * - Per-person limits: each account's own when signed in, the network's (hashed
+ *   IP) when signed out, plus an overall ceiling per network (see client.ts). Each
+ *   use is reserved before the paid work starts, inside locks on those keys, so
+ *   tabs racing each other can't get past a limit.
  */
-export class LimitReached extends Error {}
+export class LimitReached extends Error {
+  /** Logging in would give this person their own allowance. */
+  readonly loginHelps: boolean;
+  constructor(message: string, opts: { loginHelps?: boolean } = {}) {
+    super(message);
+    this.loginHelps = opts.loginHelps ?? false;
+  }
+}
+
+/** The JSON a route sends back when a limit is reached. */
+export function limitResponse(e: LimitReached) {
+  return Response.json({ error: e.message, ...(e.loginHelps ? { login: true } : {}) }, { status: 429 });
+}
 
 export async function recordSpend(entry: { label: string; model: string; usd: number; reviewId?: string }) {
   await q("INSERT INTO app.spend (at, label, model, usd, review_id) VALUES ($1, $2, $3, $4, $5)", [
@@ -55,55 +69,89 @@ export async function assertWithinSpendLimits(query: Query = q) {
   return s;
 }
 
-async function used(query: Query, key: string, kind: string, since: number): Promise<number> {
-  const [row] = await query<{ n: number }>("SELECT COUNT(*)::int AS n FROM app.usage WHERE client_key = $1 AND kind = $2 AND at >= $3", [key, kind, since]);
+async function used(query: Query, column: "client_key" | "network_key", key: string, kind: string, since: number): Promise<number> {
+  const [row] = await query<{ n: number }>(`SELECT COUNT(*)::int AS n FROM app.usage WHERE ${column} = $1 AND kind = $2 AND at >= $3`, [key, kind, since]);
   return Number(row.n);
 }
 
-async function reserve(query: Query, key: string, kind: string, reviewId: string | null) {
-  await query("INSERT INTO app.usage (at, client_key, kind, review_id) VALUES ($1, $2, $3, $4)", [Date.now(), key, kind, reviewId]);
+async function reserve(query: Query, who: Who, kind: string, reviewId: string | null) {
+  await query("INSERT INTO app.usage (at, client_key, network_key, kind, review_id) VALUES ($1, $2, $3, $4, $5)", [
+    Date.now(),
+    who.person,
+    who.network,
+    kind,
+    reviewId,
+  ]);
+}
+
+/** Locks this person's and this network's allowances, always in the same order so two requests can't deadlock. */
+async function lockAllowances(lock: (key: string) => Promise<void>, who: Who) {
+  await lock(`usage:${who.network}`);
+  if (who.person !== who.network) await lock(`usage:${who.person}`);
 }
 
 /**
- * Checks this person's daily review limit and creates the review in the same
- * transaction, so it counts the moment it exists. A review whose upload is
- * rejected or abandoned is refunded (see deleteReview).
+ * A personal limit was reached. Signed-out people share their network's allowance,
+ * so for them logging in (which gives them their own) is the way forward.
  */
-export async function startReview(key: string, review: Parameters<typeof insertReviewParams>[0]) {
+function personalLimit(who: Who, signedInMessage: string, signedOutMessage: string): LimitReached {
+  return who.signedIn ? new LimitReached(signedInMessage) : new LimitReached(signedOutMessage, { loginHelps: true });
+}
+
+/**
+ * Checks the daily review limits and creates the review in the same transaction,
+ * so it counts the moment it exists. A review whose upload is rejected or
+ * abandoned is refunded (see deleteReview).
+ */
+export async function startReview(who: Who, review: Parameters<typeof insertReviewParams>[0]) {
   await tx(async (t, lock) => {
-    await lock(`usage:${key}`);
+    await lockAllowances(lock, who);
     const s = await assertWithinSpendLimits(t);
     const room = Math.min(s.dailyLimit - s.today, s.monthlyLimit - s.month);
     if (room < SPEND_LIMITS.typicalReviewUsd)
       throw new LimitReached("The app's AI budget left for today is less than one review usually costs. Try again after midnight.");
-    const n = await used(t, key, "review", startOfToday());
+    const today = startOfToday();
+    const n = await used(t, "client_key", who.person, "review", today);
     if (n >= SPEND_LIMITS.maxReviewsPerDay)
-      throw new LimitReached(`You've started ${n} reviews today, which is the daily limit. It resets at midnight.`);
+      throw personalLimit(
+        who,
+        `You've started ${n} reviews today, which is the daily limit. It resets at midnight.`,
+        "You've used today's reviews without an account. Log in to get your own daily reviews, or come back after midnight.",
+      );
+    if ((await used(t, "network_key", who.network, "review", today)) >= SPEND_LIMITS.maxReviewsPerNetworkPerDay)
+      throw new LimitReached("So many reviews were started from your network today that it has reached its daily limit. It resets at midnight.");
     await t(INSERT_REVIEW, insertReviewParams(review));
-    await reserve(t, key, "review", review.id);
+    await reserve(t, who, "review", review.id);
   });
 }
 
 /** Answer checks in the questionnaire are cheap, but unlimited typing shouldn't run up a bill. */
-export async function spendAnswerCheck(key: string) {
+export async function spendAnswerCheck(who: Who) {
   await tx(async (t, lock) => {
-    await lock(`usage:${key}`);
+    await lockAllowances(lock, who);
     await assertWithinSpendLimits(t);
-    if ((await used(t, key, "answer_check", Date.now() - 3600_000)) >= SPEND_LIMITS.maxAnswerChecksPerHour)
-      throw new LimitReached("Too many answers in the last hour. Take a short break and try again.");
-    await reserve(t, key, "answer_check", null);
+    const hourAgo = Date.now() - 3600_000;
+    if ((await used(t, "client_key", who.person, "answer_check", hourAgo)) >= SPEND_LIMITS.maxAnswerChecksPerHour)
+      throw personalLimit(
+        who,
+        "Too many answers in the last hour. Take a short break and try again.",
+        "Too many answers in the last hour without an account. Log in to keep going, or take a short break.",
+      );
+    if ((await used(t, "network_key", who.network, "answer_check", hourAgo)) >= SPEND_LIMITS.maxAnswerChecksPerNetworkPerHour)
+      throw new LimitReached("Your network has sent too many answers in the last hour. Take a short break and try again.");
+    await reserve(t, who, "answer_check", null);
   });
 }
 
 /** Follow-up questions per review are capped so one review can't keep spending forever. */
-export async function spendFollowup(key: string, reviewId: string) {
+export async function spendFollowup(who: Who, reviewId: string) {
   await tx(async (t, lock) => {
     await lock(`followup:${reviewId}`);
     await assertWithinSpendLimits(t);
     const [row] = await t<{ n: number }>("SELECT COUNT(*)::int AS n FROM app.usage WHERE review_id = $1 AND kind = 'followup'", [reviewId]);
     if (Number(row.n) >= SPEND_LIMITS.maxFollowupsPerReview)
       throw new LimitReached(`This review has reached its limit of ${SPEND_LIMITS.maxFollowupsPerReview} follow-up questions.`);
-    await reserve(t, key, "followup", reviewId);
+    await reserve(t, who, "followup", reviewId);
   });
 }
 
@@ -112,12 +160,12 @@ export async function followupsUsed(reviewId: string): Promise<number> {
   return Number(row.n);
 }
 
-/** What this person has used of their limits, for the signed-in reviews page. */
-export async function usageFor(key: string) {
+/** What this person has used of their own limits, for the signed-in reviews page. */
+export async function usageFor(who: Who) {
   return {
-    reviewsToday: await used(q, key, "review", startOfToday()),
+    reviewsToday: await used(q, "client_key", who.person, "review", startOfToday()),
     maxReviewsPerDay: SPEND_LIMITS.maxReviewsPerDay,
-    answerChecksLastHour: await used(q, key, "answer_check", Date.now() - 3600_000),
+    answerChecksLastHour: await used(q, "client_key", who.person, "answer_check", Date.now() - 3600_000),
     maxAnswerChecksPerHour: SPEND_LIMITS.maxAnswerChecksPerHour,
     maxFollowupsPerReview: SPEND_LIMITS.maxFollowupsPerReview,
   };

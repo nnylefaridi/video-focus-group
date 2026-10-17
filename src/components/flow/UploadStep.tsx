@@ -6,6 +6,7 @@ import type { ExpertCard } from "@/core/expert";
 import type { Answer } from "@/core/questionnaire/engine";
 import { Avatar } from "../Avatar";
 import { ArrowLeft, Film } from "../Icons";
+import { LoginHint } from "./LoginHint";
 
 const MAX_BYTES = 250 * 1024 * 1024;
 const ACCEPT = "video/mp4,video/quicktime,video/webm,.mp4,.mov,.m4v,.webm";
@@ -34,9 +35,11 @@ export function UploadStep({ answers, board, onBack, onDone }: { answers: Answer
   const [drag, setDrag] = useState(false);
   const [progress, setProgress] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [loginHelps, setLoginHelps] = useState(false);
 
   async function start(file: File) {
     setError(null);
+    setLoginHelps(false);
     if (file.size > MAX_BYTES) return setError("That file is larger than 250 MB. Please export a smaller version.");
     if (file.size === 0) return setError("That file is empty.");
 
@@ -45,6 +48,7 @@ export function UploadStep({ answers, board, onBack, onDone }: { answers: Answer
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
       setProgress(null);
+      setLoginHelps(Boolean(data.login));
       return setError(data.error ?? "Couldn't start the review.");
     }
     const up = await uploadWithProgress(`/api/reviews/${data.id}/video`, file, setProgress);
@@ -118,6 +122,7 @@ export function UploadStep({ answers, board, onBack, onDone }: { answers: Answer
       {error && (
         <p role="alert" className="mt-4 rounded-xl bg-warn-soft px-4 py-3 text-sm text-warn">
           {error}
+          {loginHelps && <LoginHint />}
         </p>
       )}
 

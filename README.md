@@ -84,11 +84,26 @@ Open http://127.0.0.1:3000 (or http://localhost:3000). This starts the web app a
   | `MAX_REVIEWS_PER_DAY` | 8 | each person | New reviews are refused until midnight |
   | `MAX_FOLLOWUPS_PER_REVIEW` | 20 | each review | No more follow-up questions on that review |
   | `MAX_ANSWER_CHECKS_PER_HOUR` | 60 | each person | Questionnaire answers pause for a bit |
+  | `MAX_REVIEWS_PER_NETWORK_PER_DAY` | 40 | each network | No more reviews from that network until midnight |
+  | `MAX_ANSWER_CHECKS_PER_NETWORK_PER_HOUR` | 300 | each network | Answers from that network pause for a bit |
 
-  **Each person** means each IP address: every tab, window and browser on one connection shares one allowance, signed in or not (IPv6 addresses are grouped by their /64 network). A use is reserved before the paid work starts, inside a database lock on that person, so tabs racing each other can't slip past a limit. Only a keyed hash of the address is stored. A review whose upload is rejected or abandoned is given back; deleting a finished review is not. The address is read from the connection itself by `server.mjs` (which `npm run dev` and `npm start` use), so a browser can't fake a new one with an `X-Forwarded-For` header. If you deploy behind proxies that append to `X-Forwarded-For`, set `TRUSTED_PROXIES` to how many there are, or set `CLIENT_IP_HEADER` to the header your host overwrites with the visitor's address.
+  **Each person** means each account when signed in, so students on one school network or staff in one office each get their own allowance, in every tab and browser. Signed out, it means each network (IP address; IPv6 grouped by its /64), and reaching the limit offers to log in for an allowance of their own. **Each network** is an overall ceiling, signed in or not, so one network can't drain the budget with many accounts. A use is reserved before the paid work starts, inside database locks on the person and network, so tabs racing each other can't slip past a limit. Only a keyed hash of the address is stored. A review whose upload is rejected or abandoned is given back; deleting a finished review is not. The address is read from the connection itself by `server.mjs` (which `npm run dev` and `npm start` use), so a browser can't fake a new one with an `X-Forwarded-For` header. If you deploy behind proxies that append to `X-Forwarded-For`, set `TRUSTED_PROXIES` to how many there are, or set `CLIENT_IP_HEADER` to the header your host overwrites with the visitor's address.
 
   A new review is also refused if less than about $1.50 (a typical review) is left in today's or this month's budget. Signed-in people see their own limits on **Your reviews**. Add your email to `OWNER_EMAILS` to also see the app's spend there.
 - **Hard backstop:** also set a monthly spend limit for your key in the Anthropic Console (Settings → Limits). That limit is enforced by Anthropic even if something here goes wrong.
+
+## Going live (Railway)
+
+The site and the video worker run together in one container ([Dockerfile](Dockerfile)): ffmpeg, whisper.cpp and its model are built in. [Railway](https://railway.com) builds it from this GitHub repository on every push (about $5 a month). Supabase stays as it is.
+
+1. **Railway project.** New Project → Deploy from GitHub repo → this repository. Railway finds the Dockerfile.
+2. **Disk.** Add a **Volume** to the service, mounted at `/data` (working video files, and the key that hashes visitor addresses).
+3. **Variables.** In the service's **Variables** → **Raw Editor**, paste the values from `.env.local` (`ANTHROPIC_API_KEY`, the four Supabase values, and any limits), plus `CLIENT_IP_HEADER=x-real-ip` (Railway's edge sets it to the visitor's address).
+4. **Address.** **Settings → Networking → Generate Domain** (or add your own domain).
+5. **Supabase.** **Authentication → URL Configuration**: set **Site URL** to the new address and add `https://<your address>/auth/callback` to **Redirect URLs** (keep the local ones for development). Email links use the Site URL, so they now open the live site.
+6. **Anthropic.** Set a monthly spend limit for the key in the Anthropic Console (Settings → Limits) as a hard backstop.
+
+Media from signed-in users' reviews is in Supabase Storage (1 GB on the free plan); everything else lives on the volume. Each upload's original file is deleted once its analysis is saved.
 
 ## Reviewers
 

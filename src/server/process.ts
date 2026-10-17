@@ -71,6 +71,8 @@ export async function processReview(id: string) {
     const partial = { shots, frames, transcript, ...signals, perception };
     ledger = { ...partial, coverage: coverage(p, partial) };
     await updateReview(id, { ledger });
+    // Analysis is saved: the upload as sent (often 100+ MB) and the speech audio aren't needed again.
+    for (const f of fs.readdirSync(dir)) if (f.startsWith("original.") || f === "audio.wav") fs.rmSync(path.join(dir, f), { force: true });
   }
 
   // 2. Independent reviewer passes. The first warms the shared evidence cache, the rest run in parallel.

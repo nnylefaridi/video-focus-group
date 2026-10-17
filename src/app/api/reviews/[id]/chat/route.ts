@@ -3,7 +3,7 @@ import { connection } from "next/server";
 import type Anthropic from "@anthropic-ai/sdk";
 import { reviewDir, updateReview, type ReviewRecord } from "@/server/reviews";
 import { accessibleReview } from "@/server/auth";
-import { clientKey } from "@/server/client";
+import { whoIsCalling } from "@/server/client";
 import { enqueue } from "@/server/jobs";
 import { restoreFile } from "@/server/storage";
 import { addMessage, getThread } from "@/server/followups";
@@ -13,7 +13,7 @@ import { AiUnavailable, BudgetExceeded } from "@/ai/client";
 import { denseSample } from "@/media/pipeline";
 import { perceiveFrames } from "@/ai/perceive";
 import { evidenceSpan, type Ledger } from "@/core/evidence";
-import { spendFollowup, LimitReached } from "@/server/budget";
+import { spendFollowup, LimitReached, limitResponse } from "@/server/budget";
 
 const Body = z.object({ reviewerId: z.string(), message: z.string().trim().min(1).max(2000) });
 
@@ -65,17 +65,18 @@ export async function POST(req: Request, ctx: RouteContext<"/api/reviews/[id]/ch
   const { id } = await ctx.params;
   const parsed = Body.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return Response.json({ error: "Invalid request" }, { status: 400 });
-  const r = (await accessibleReview(id))?.review;
-  if (!r) return Response.json({ error: "Not found" }, { status: 404 });
+  const found = await accessibleReview(id);
+  const r = found?.review;
+  if (!found || !r) return Response.json({ error: "Not found" }, { status: 404 });
   if (!r.ledger) return Response.json({ error: "This review isn't ready yet." }, { status: 409 });
   if (!r.board.includes(parsed.data.reviewerId)) return Response.json({ error: "That reviewer isn't on this panel." }, { status: 400 });
   const profile = getProfile(parsed.data.reviewerId);
   if (!profile) return Response.json({ error: "That reviewer is no longer available." }, { status: 400 });
 
   try {
-    await spendFollowup(clientKey(req.headers), id);
+    await spendFollowup(whoIsCalling(req.headers, found.viewer.userId), id);
   } catch (e) {
-    if (e instanceof LimitReached) return Response.json({ error: e.message }, { status: 429 });
+    if (e instanceof LimitReached) return limitResponse(e);
     throw e;
   }
 

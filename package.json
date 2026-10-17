@@ -7,7 +7,7 @@
     "dev:web": "node server.mjs --dev",
     "worker": "tsx --env-file-if-exists=.env.local worker/index.mts",
     "build": "next build",
-    "start": "NODE_ENV=production node server.mjs",
+    "start": "node scripts/start.mjs",
     "lint": "eslint",
     "typecheck": "next typegen && tsc --noEmit",
     "test": "vitest run",
@@ -17,13 +17,13 @@
     "e2e": "playwright test",
     "eval": "tsx --env-file-if-exists=.env.local scripts/eval.mts",
     "smoke": "tsx --env-file-if-exists=.env.local scripts/smoke-review.mts",
-    "db:import-local": "tsx --env-file-if-exists=.env.local scripts/import-local.mts"
+    "db:import-local": "tsx --env-file-if-exists=.env.local scripts/import-local.mts",
+    "start:web": "NODE_ENV=production node server.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.135.0",
     "@supabase/ssr": "^0.12.7",
     "@supabase/supabase-js": "^2.118.0",
-    "better-sqlite3": "^13.0.3",
     "motion": "^14.3.0",
     "nanoid": "^6.0.2",
     "next": "16.4.2",
@@ -32,6 +32,7 @@
     "react-dom": "19.3.0",
     "server-only": "^0.0.1",
     "sharp": "^0.35.5",
+    "tsx": "^4.23.15",
     "yaml": "^2.9.1",
     "zod": "^4.6.7"
   },
@@ -43,10 +44,10 @@
     "@types/node": "^24.19.2",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "better-sqlite3": "^13.0.3",
     "eslint": "^9",
     "eslint-config-next": "16.4.2",
     "tailwindcss": "^4",
-    "tsx": "^4.23.15",
     "typescript": "^5",
     "vitest": "^5.0.5"
   }
