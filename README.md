@@ -20,10 +20,10 @@ Open **Terminal** and run these one at a time.
    ```
 2. **Download Panel:**
    ```bash
-   git clone https://github.com/nnylefaridi/paper-panel.git
+   git clone https://github.com/nnylefaridi/video-focus-group.git
    ```
    ```bash
-   cd paper-panel
+   cd video-focus-group
    ```
 3. **Install its packages** (takes a minute or two):
    ```bash
@@ -49,13 +49,13 @@ Then open **http://127.0.0.1:3000** in your browser.
 - Answer a few questions about your video, check the board of reviewers, then upload the video (MP4, MOV or WebM, up to 3 minutes and 250 MB).
 - The review takes a few minutes. You can leave the page and come back: past reviews are under **All reviews** (inside any review) at **http://127.0.0.1:3000/reviews**.
 - Ask any reviewer follow-up questions in the **Discussion** tab, under **Ask a reviewer**.
-- **To stop Panel**, go back to Terminal and press **Ctrl + C**. Next time, open Terminal, `cd paper-panel`, and run `npm run dev` again.
+- **To stop Panel**, go back to Terminal and press **Ctrl + C**. Next time, open Terminal, `cd video-focus-group`, and run `npm run dev` again.
 
 Only your computer can open Panel: it listens on `127.0.0.1`, so nobody else on your network can reach it or spend your key.
 
 ## Update to the newest version
 
-In Terminal, inside the `paper-panel` folder (stop Panel first with Ctrl + C):
+In Terminal, inside the `video-focus-group` folder (stop Panel first with Ctrl + C):
 ```bash
 git pull
 ```
