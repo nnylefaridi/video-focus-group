@@ -33,4 +33,9 @@ server.on("request", (req, res) => {
   req.headers[header] = chain[Math.max(0, chain.length - 1 - trustedProxies)];
   handle(req, res);
 });
+server.on("error", (e) => {
+  if (e.code === "EADDRINUSE") console.error(`\nPort ${port} is already in use (is Panel already running in another window?). Stop that, or run on another port: PORT=${port + 1} npm run dev\n`);
+  else console.error(e);
+  process.exit(1);
+});
 server.listen(port, hostname, () => console.log(`> Ready on http://${hostname}:${port}${dev ? " (development)" : ""}`));

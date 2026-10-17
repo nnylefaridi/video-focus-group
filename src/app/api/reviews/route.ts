@@ -5,7 +5,7 @@ import { liveProfiles } from "@/experts/load";
 import { listReviewsFor, newReviewId } from "@/server/reviews";
 import { hasAnthropicKey } from "@/server/config";
 import { startReview, LimitReached, limitResponse } from "@/server/budget";
-import { ensureAnonId, getViewer } from "@/server/auth";
+import { authReady, ensureAnonId, getViewer } from "@/server/auth";
 import { whoIsCalling } from "@/server/client";
 
 const Body = z.object({
@@ -16,7 +16,7 @@ const Body = z.object({
 export async function GET() {
   await connection();
   const viewer = await getViewer();
-  if (!viewer.userId) return Response.json({ error: "Log in to keep a record of your reviews." }, { status: 401 });
+  if (authReady && !viewer.userId) return Response.json({ error: "Log in to keep a record of your reviews." }, { status: 401 });
   return Response.json({ reviews: await listReviewsFor(viewer.userId) });
 }
 

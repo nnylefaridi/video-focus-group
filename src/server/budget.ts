@@ -2,6 +2,7 @@ import { q, tx, type Query } from "./db";
 import { SPEND_LIMITS } from "./config";
 import { INSERT_REVIEW, insertReviewParams } from "./reviews";
 import type { Who } from "./client";
+import { authReady } from "@/lib/supabase";
 
 /**
  * Two layers of protection for the API key:
@@ -95,7 +96,8 @@ async function lockAllowances(lock: (key: string) => Promise<void>, who: Who) {
  * so for them logging in (which gives them their own) is the way forward.
  */
 function personalLimit(who: Who, signedInMessage: string, signedOutMessage: string): LimitReached {
-  return who.signedIn ? new LimitReached(signedInMessage) : new LimitReached(signedOutMessage, { loginHelps: true });
+  // In local mode there are no accounts, so the plain message is the right one.
+  return who.signedIn || !authReady ? new LimitReached(signedInMessage) : new LimitReached(signedOutMessage, { loginHelps: true });
 }
 
 /**

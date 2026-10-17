@@ -9,6 +9,9 @@ import path from "node:path";
 import { beforeAll, describe, expect, it } from "vitest";
 
 process.env.DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "panel-budget-"));
+// Accounts on (Supabase configured); local mode is covered in local-mode.test.ts.
+process.env.NEXT_PUBLIC_SUPABASE_URL = "https://example.supabase.co";
+process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY = "sb_publishable_test";
 process.env.DAILY_LIMIT_USD = "2";
 process.env.MONTHLY_LIMIT_USD = "3";
 process.env.MAX_REVIEWS_PER_DAY = "2";

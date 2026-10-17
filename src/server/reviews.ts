@@ -116,8 +116,11 @@ export function canAccess(r: Pick<ReviewRecord, "userId" | "anonId">, viewer: Ow
 
 export type ReviewSummary = Pick<ReviewRecord, "id" | "createdAt" | "stage" | "title" | "board" | "intent">;
 
-export async function listReviewsFor(userId: string): Promise<ReviewSummary[]> {
-  const rows = await q("SELECT id, created_at, stage, title, board, intent FROM app.reviews WHERE user_id = $1 ORDER BY created_at DESC", [userId]);
+/** An account's reviews, or (with no account, in local mode) every review on this computer. */
+export async function listReviewsFor(userId: string | null): Promise<ReviewSummary[]> {
+  const rows = userId
+    ? await q("SELECT id, created_at, stage, title, board, intent FROM app.reviews WHERE user_id = $1 ORDER BY created_at DESC", [userId])
+    : await q("SELECT id, created_at, stage, title, board, intent FROM app.reviews ORDER BY created_at DESC");
   return rows.map((r) => ({
     id: String(r.id),
     createdAt: Number(r.created_at),

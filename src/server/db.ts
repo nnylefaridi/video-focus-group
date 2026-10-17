@@ -77,11 +77,19 @@ async function migrate(d: Driver) {
   });
 }
 
+/** The built-in database `npm run dev` starts when DATABASE_URL isn't set (scripts/local-db.mjs). */
+const LOCAL_DATABASE_URL = "postgres://panel:panel@127.0.0.1:54329/panel";
+
 async function open(): Promise<Driver> {
-  const url = process.env.DATABASE_URL;
-  if (!url) throw new NotConfigured("DATABASE_URL is not set. Add your Supabase database connection string to .env.local (see README) and restart.");
+  const url = process.env.DATABASE_URL || LOCAL_DATABASE_URL;
   const d = url.startsWith("pglite:") ? await pgliteDriver(url.slice("pglite:".length)) : await postgresDriver(url);
-  await migrate(d);
+  try {
+    await migrate(d);
+  } catch (e) {
+    if (/ECONNREFUSED|connect/i.test(String((e as { code?: string }).code ?? e)) && url === LOCAL_DATABASE_URL)
+      throw new NotConfigured("The local database isn't running. Start Panel with `npm run dev`.");
+    throw e;
+  }
   return d;
 }
 

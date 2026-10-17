@@ -1,8 +1,10 @@
 /**
- * One-time move of reviews made before the Supabase database existed (data/app.db)
- * into your account, with their follow-up chats and spend history. Their media is
- * then copied to storage by the worker. Safe to run twice: existing rows are skipped.
- *   npm run db:import-local -- --email you@example.com
+ * One-time move of reviews made with an older version of Panel (data/app.db) into
+ * today's database, with their follow-up chats and spend history. Safe to run twice:
+ * existing rows are skipped. Run it while `npm run dev` is running.
+ *   npm run db:import-local                              local mode (no accounts)
+ *   npm run db:import-local -- --email you@example.com   with Supabase: into that account,
+ *                                                        and the worker copies their media to storage
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -12,9 +14,10 @@ import { enqueue } from "../src/server/jobs";
 import { DATA_DIR } from "../src/server/config";
 
 const args = process.argv.slice(2);
-const email = args[args.indexOf("--email") + 1];
-if (!args.includes("--email") || !email) {
-  console.error("Usage: npm run db:import-local -- --email you@example.com  (sign up in the app with that email first)");
+const email = args.includes("--email") ? args[args.indexOf("--email") + 1] : null;
+const accounts = Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY);
+if (accounts && !email) {
+  console.error("Accounts are on, so say whose reviews these are: npm run db:import-local -- --email you@example.com (sign up in the app with that email first)");
   process.exit(1);
 }
 const file = path.join(DATA_DIR, "app.db");
@@ -22,7 +25,7 @@ if (!fs.existsSync(file)) {
   console.log(`Nothing to import: ${file} doesn't exist.`);
   process.exit(0);
 }
-const user = await one<{ id: string }>("SELECT id FROM auth.users WHERE lower(email) = lower($1)", [email]);
+const user = email ? await one<{ id: string }>("SELECT id FROM auth.users WHERE lower(email) = lower($1)", [email]) : { id: null };
 if (!user) throw new Error(`No account with the email ${email}. Sign up in the app first, then run this again.`);
 
 const old = new Database(file, { readonly: true, fileMustExist: true });
@@ -56,6 +59,10 @@ const imported = await tx(async (t) => {
   }
   return ids;
 });
-for (const id of imported) await enqueue(id, "store");
-console.log(`Imported ${imported.length} review(s) into ${email}${imported.length ? "; the worker is copying their media to storage" : ""}.`);
+if (user.id) for (const id of imported) await enqueue(id, "store");
+console.log(
+  user.id
+    ? `Imported ${imported.length} review(s) into ${email}${imported.length ? "; the worker is copying their media to storage" : ""}.`
+    : `Imported ${imported.length} review(s). They're on Your reviews.`,
+);
 process.exit(0);

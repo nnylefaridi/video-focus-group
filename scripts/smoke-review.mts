@@ -39,7 +39,8 @@ fs.mkdirSync(reviewDir(id), { recursive: true });
 fs.copyFileSync(src, path.join(reviewDir(id), `original.${container}`));
 await updateReview(id, { stage: "queued", video: { originalName: path.basename(src), bytes: fs.statSync(src).size, ...meta } });
 await enqueue(id, "process");
-console.log(userId ? `Review ${id} queued. Open http://localhost:3000/r/${id}` : `Review ${id} queued (pass --email to open it in your account).`);
+const accounts = Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL);
+console.log(userId || !accounts ? `Review ${id} queued. Open http://127.0.0.1:3000/r/${id}` : `Review ${id} queued (pass --email to open it in your account).`);
 
 let last = "";
 const t0 = Date.now();

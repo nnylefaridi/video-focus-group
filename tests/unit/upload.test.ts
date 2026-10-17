@@ -17,6 +17,9 @@ vi.mock("next/headers", () => ({
 
 const DATA = fs.mkdtempSync(path.join(os.tmpdir(), "panel-test-"));
 process.env.DATA_DIR = DATA;
+// With accounts on (Supabase configured), a review belongs to the browser that started it.
+process.env.NEXT_PUBLIC_SUPABASE_URL = "https://example.supabase.co";
+process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY = "sb_publishable_test";
 const FILES = fs.mkdtempSync(path.join(os.tmpdir(), "panel-files-"));
 
 type Mods = {

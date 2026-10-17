@@ -2,6 +2,8 @@ import crypto from "node:crypto";
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 import { authReady, SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from "@/lib/supabase";
+
+export { authReady };
 import { canAccess, claimAnonymous, getReview, type ReviewRecord } from "./reviews";
 import { enqueue } from "./jobs";
 
@@ -52,11 +54,16 @@ export async function claimForViewer(viewer: Viewer) {
   for (const r of claimed) if (r.stage === "done") await enqueue(r.id, "store");
 }
 
-/** The review, if this viewer may see it: their account's, or this browser's from before sign-in. */
+/**
+ * The review, if this viewer may see it: their account's, or this browser's from
+ * before sign-in. In local mode (no accounts) every review on this computer is theirs.
+ */
 export async function accessibleReview(id: string): Promise<{ review: ReviewRecord; viewer: Viewer } | null> {
   if (!/^[A-Za-z0-9_-]{16}$/.test(id)) return null;
   const [review, viewer] = await Promise.all([getReview(id), getViewer()]);
-  if (!review || !canAccess(review, viewer)) return null;
+  if (!review) return null;
+  if (!authReady) return { review, viewer };
+  if (!canAccess(review, viewer)) return null;
   if (!review.userId && viewer.userId) {
     // Signed in since making it: it joins the account now.
     await claimForViewer(viewer);

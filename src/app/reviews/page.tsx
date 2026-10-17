@@ -6,7 +6,7 @@ import { listReviewsFor } from "@/server/reviews";
 import { getProfile } from "@/experts/load";
 import { STAGE_LABELS } from "@/core/review";
 import { spendSummary, usageFor } from "@/server/budget";
-import { claimForViewer, getViewer } from "@/server/auth";
+import { authReady, claimForViewer, getViewer } from "@/server/auth";
 import { whoIsCalling } from "@/server/client";
 import { SignOut } from "@/components/account/SignOut";
 
@@ -31,9 +31,10 @@ function Meter({ label, used, max, note }: { label: string; used: number; max: n
   );
 }
 
-async function Usage({ email, userId }: { email: string | null; userId: string }) {
+async function Usage({ email, userId }: { email: string | null; userId: string | null }) {
   const u = await usageFor(whoIsCalling(await headers(), userId));
-  const owner = isOwner(email) ? await spendSummary() : null;
+  // Your own computer (local mode) or your own email: show what the app has spent.
+  const owner = !authReady || isOwner(email) ? await spendSummary() : null;
   const m = (n: number) => `$${n.toFixed(2)}`;
   return (
     <section aria-labelledby="usage" className="cutout mt-6 space-y-4 p-5">
@@ -52,7 +53,7 @@ async function Usage({ email, userId }: { email: string | null; userId: string }
   );
 }
 
-async function List({ userId }: { userId: string }) {
+async function List({ userId }: { userId: string | null }) {
   const reviews = (await listReviewsFor(userId)).filter((r) => r.stage !== "uploading");
   if (reviews.length === 0) {
     return (
@@ -113,6 +114,14 @@ async function Account() {
   // Limits depend on the current time, so this always renders per request.
   await connection();
   const viewer = await getViewer();
+  // Local mode: no accounts, so everything on this computer is listed.
+  if (!authReady)
+    return (
+      <>
+        <Usage email={null} userId={null} />
+        <List userId={null} />
+      </>
+    );
   if (!viewer.userId) return <LoginGate />;
   await claimForViewer(viewer);
   return (

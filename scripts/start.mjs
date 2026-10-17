@@ -1,15 +1,25 @@
-// Production: starts the website and the background worker together (the Dockerfile's command).
-// If either stops, both stop, so the host restarts the container cleanly.
+// Production build on your computer (`npm run build`, then `npm start`): the website
+// and the background worker together, plus the local database when DATABASE_URL isn't set.
 import { spawn } from "node:child_process";
+import { startLocalDatabase, wantsLocalDatabase } from "./local-db.mjs";
+
+const db = wantsLocalDatabase() ? await startLocalDatabase() : null;
+if (db) process.env.DATABASE_URL = db.url;
+process.env.NODE_ENV = "production";
 
 const procs = [
   spawn("node", ["server.mjs"], { stdio: "inherit" }),
-  spawn("node", ["--import", "tsx", "worker/index.mts"], { stdio: "inherit" }),
+  spawn("node", ["--env-file-if-exists=.env.local", "--import", "tsx", "worker/index.mts"], { stdio: "inherit" }),
 ];
-const stop = () => procs.forEach((p) => p.kill("SIGTERM"));
-process.on("SIGINT", stop);
-process.on("SIGTERM", stop);
-procs.forEach((p) => p.on("exit", (code) => {
-  stop();
-  process.exitCode = code ?? 1;
-}));
+let stopping = false;
+async function stop(code = 0) {
+  if (stopping) return;
+  stopping = true;
+  procs.forEach((p) => p.kill("SIGTERM"));
+  await Promise.all(procs.map((p) => (p.exitCode === null ? new Promise((r) => p.once("exit", r)) : null)));
+  await db?.stop().catch(() => {});
+  process.exit(code);
+}
+process.on("SIGINT", () => stop());
+process.on("SIGTERM", () => stop());
+procs.forEach((p) => p.on("exit", (code) => stop(code ?? 1)));
