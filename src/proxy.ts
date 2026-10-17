@@ -6,6 +6,16 @@ import { authReady, SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from "@/lib/supabas
 export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request });
   if (!authReady) return response;
+  // A sign-in that landed somewhere other than /auth/callback (Supabase falls back to the
+  // Site URL when it doesn't recognise the return address): finish it at the callback.
+  const { pathname, searchParams } = request.nextUrl;
+  if (searchParams.has("code") && pathname !== "/auth/callback" && !pathname.startsWith("/api/")) {
+    const to = request.nextUrl.clone();
+    to.pathname = "/auth/callback";
+    to.search = "";
+    to.searchParams.set("code", searchParams.get("code")!);
+    return NextResponse.redirect(to);
+  }
   const supabase = createServerClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
     cookies: {
       getAll: () => request.cookies.getAll(),

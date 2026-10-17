@@ -36,7 +36,7 @@ export function LoginForm() {
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState<null | "google" | "email" | "reset">(null);
   const [error, setError] = useState<string | null>(params.get("error") ? "That link didn't work or has expired. Please try again." : null);
-  const [notice, setNotice] = useState<string | null>(params.get("confirmed") ? "Your email is confirmed. Log in with your email and password to continue." : null);
+  const [notice, setNotice] = useState<string | null>(params.get("confirmed") ? "Almost there: log in here to finish. If you just confirmed your email, that worked." : null);
 
   if (!authReady) {
     return (
@@ -49,7 +49,11 @@ export function LoginForm() {
     );
   }
 
-  const callback = (to: string) => `${window.location.origin}/auth/callback?next=${encodeURIComponent(to)}`;
+  const callback = (to: string) => {
+    // Also remember the destination for 10 minutes, in case the sign-in comes back without it.
+    document.cookie = `panel_next=${encodeURIComponent(to)}; path=/; max-age=600; samesite=lax`;
+    return `${window.location.origin}/auth/callback?next=${encodeURIComponent(to)}`;
+  };
   const reset = () => {
     setError(null);
     setNotice(null);

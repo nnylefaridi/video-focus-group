@@ -9,10 +9,12 @@ import { claimForViewer, getViewer, supabaseServer } from "@/server/auth";
  */
 export async function GET(req: Request) {
   const url = new URL(req.url);
+  // Where to go afterwards: from the link, else from the note the login page left (see LoginForm).
+  const remembered = decodeURIComponent(req.headers.get("cookie")?.match(/(?:^|;\s*)panel_next=([^;]+)/)?.[1] ?? "");
   // Send the browser back to the exact host it used (127.0.0.1 vs localhost matters: the
   // sign-in cookie is set on that host). Next can report a different one in req.url.
   const origin = `${req.headers.get("x-forwarded-proto") ?? url.protocol.replace(":", "")}://${req.headers.get("host") ?? url.host}`;
-  const next = safeNext(url.searchParams.get("next"));
+  const next = safeNext(url.searchParams.get("next") ?? remembered);
   const code = url.searchParams.get("code");
   const tokenHash = url.searchParams.get("token_hash");
   const type = url.searchParams.get("type") as EmailOtpType | null;
@@ -34,5 +36,7 @@ export async function GET(req: Request) {
   }
   const { anonId } = await getViewer();
   await claimForViewer({ userId: user.id, email: user.email ?? null, anonId });
-  return NextResponse.redirect(new URL(next, origin));
+  const done = NextResponse.redirect(new URL(next, origin));
+  done.cookies.delete("panel_next");
+  return done;
 }
