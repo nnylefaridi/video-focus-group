@@ -3,6 +3,7 @@
 // connections from this computer. Used when DATABASE_URL isn't set, so no
 // database needs installing or an account anywhere.
 import fs from "node:fs";
+import net from "node:net";
 import path from "node:path";
 import EmbeddedPostgres from "embedded-postgres";
 
@@ -18,8 +19,20 @@ export function wantsLocalDatabase() {
   return !fs.readFileSync(file, "utf8").split("\n").some((l) => /^DATABASE_URL=\S+/.test(l.trim()));
 }
 
+export class LocalDatabaseError extends Error {}
+
+/** True when the local database is already running (Panel is open in another window). */
+export const localDatabaseRunning = () =>
+  new Promise((resolve) => {
+    const s = net.connect(PORT, "127.0.0.1");
+    s.once("connect", () => (s.destroy(), resolve(true)));
+    s.once("error", () => resolve(false));
+  });
+
 /** Starts the local database (creating it the first time) and returns how to stop it. */
 export async function startLocalDatabase({ quiet = true } = {}) {
+  if (await localDatabaseRunning())
+    throw new LocalDatabaseError("Panel is already running in another Terminal window. Use that one, or press Ctrl + C there first.");
   const dir = path.join(process.env.DATA_DIR ?? path.join(process.cwd(), "data"), "pg");
   const pg = new EmbeddedPostgres({
     databaseDir: dir,
@@ -39,9 +52,8 @@ export async function startLocalDatabase({ quiet = true } = {}) {
   try {
     await pg.start();
   } catch (e) {
-    throw new Error(
-      `The local database couldn't start (${e instanceof Error ? e.message : e}). If Panel is already running in another terminal, use that one, or stop it first.`,
-    );
+    const why = e instanceof Error ? e.message : typeof e === "string" ? e : "";
+    throw new LocalDatabaseError(`The local database couldn't start${why ? ` (${why})` : ""}. Try npm run setup, then npm run dev again.`);
   }
   const client = pg.getPgClient();
   await client.connect();

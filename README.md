@@ -88,7 +88,7 @@ A new review is also refused if less than about $1.50 is left in today's or this
 | `npm run setup` says a tool is missing | Run `brew install ffmpeg whisper-cpp`, then `npm run setup` again. |
 | `command not found: npm` or `brew` | Install [Homebrew](https://brew.sh), then `brew install node`. Close and reopen Terminal. |
 | "Anthropic rejected that key" | Copy the whole key again from the Anthropic Console (it starts with `sk-ant-`), and check billing is set up. |
-| "The local database couldn't start" | Panel is probably already running in another Terminal window. Use that one, or press Ctrl + C there first. |
+| "Panel is already running in another Terminal window" | Use that window, or press Ctrl + C there first. |
 | "Port 3000 is already in use" | Something else uses port 3000. Run `PORT=3001 npm run dev` and open http://127.0.0.1:3001. |
 | A limit message ("budget is used up", "daily limit") | It resets at the time it says. To raise it, see [Spending limits](#spending-limits). |
 | A review says "failed" | Press **Try again** in the review. Finished steps are kept, so it continues where it stopped. |

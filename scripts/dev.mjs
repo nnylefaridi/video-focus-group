@@ -1,9 +1,14 @@
 // Starts the web app and the background worker together; Ctrl+C stops both.
 // Without DATABASE_URL in .env.local, it also runs the built-in local database.
 import { spawn } from "node:child_process";
-import { startLocalDatabase, wantsLocalDatabase } from "./local-db.mjs";
+import { LocalDatabaseError, startLocalDatabase, wantsLocalDatabase } from "./local-db.mjs";
 
-const db = wantsLocalDatabase() ? await startLocalDatabase() : null;
+const db = wantsLocalDatabase()
+  ? await startLocalDatabase().catch((e) => {
+      console.error(`\n${e instanceof LocalDatabaseError ? e.message : e}\n`);
+      process.exit(1);
+    })
+  : null;
 if (db) process.env.DATABASE_URL = db.url;
 
 const procs = [

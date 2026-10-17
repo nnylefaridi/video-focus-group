@@ -79,7 +79,10 @@ test("APIs refuse bad input and unsigned media", async ({ request }) => {
 });
 
 test("a finished review opens as a paper puppet boardroom", async ({ page, request }) => {
-  const { reviews } = await (await request.get("/api/reviews")).json();
+  const list = await request.get("/api/reviews");
+  // With accounts on, the list needs a signed-in browser; in local mode it lists everything.
+  test.skip(list.status() === 401, "Accounts are on and this test browser isn't signed in");
+  const { reviews } = await list.json();
   const done = (reviews as { id: string; stage: string; board: string[] }[]).find((r) => r.stage === "done");
   test.skip(!done, "No finished review in this install yet");
   await page.goto(`/r/${done!.id}`);

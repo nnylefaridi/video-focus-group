@@ -1,9 +1,14 @@
 // Production build on your computer (`npm run build`, then `npm start`): the website
 // and the background worker together, plus the local database when DATABASE_URL isn't set.
 import { spawn } from "node:child_process";
-import { startLocalDatabase, wantsLocalDatabase } from "./local-db.mjs";
+import { LocalDatabaseError, startLocalDatabase, wantsLocalDatabase } from "./local-db.mjs";
 
-const db = wantsLocalDatabase() ? await startLocalDatabase() : null;
+const db = wantsLocalDatabase()
+  ? await startLocalDatabase().catch((e) => {
+      console.error(`\n${e instanceof LocalDatabaseError ? e.message : e}\n`);
+      process.exit(1);
+    })
+  : null;
 if (db) process.env.DATABASE_URL = db.url;
 process.env.NODE_ENV = "production";
 

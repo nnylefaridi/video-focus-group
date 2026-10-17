@@ -3,9 +3,9 @@
 // key (and checks it works), and prepares the built-in database. Safe to run again.
 import fs from "node:fs";
 import path from "node:path";
-import readline from "node:readline/promises";
+import readline from "node:readline";
 import { execFileSync } from "node:child_process";
-import { startLocalDatabase, wantsLocalDatabase } from "./local-db.mjs";
+import { localDatabaseRunning, startLocalDatabase, wantsLocalDatabase } from "./local-db.mjs";
 
 const ROOT = process.cwd();
 const ok = (msg) => console.log(`  ✓ ${msg}`);
@@ -78,9 +78,15 @@ if (key && (await keyWorks(key)) === "rejected") {
 if (!key) {
   console.log("\n  Panel needs an Anthropic API key. Create one at https://console.anthropic.com");
   console.log("  (Settings → API Keys; add billing first). It stays in .env.local on this computer.\n");
-  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  // Lines are read through an iterator so nothing typed is lost while a key is being checked.
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout, terminal: Boolean(process.stdin.isTTY) });
+  const lines = rl[Symbol.asyncIterator]();
   for (;;) {
-    key = (await rl.question("  Paste your API key: ")).trim();
+    process.stdout.write("  Paste your API key: ");
+    const next = await lines.next();
+    if (next.done) fail("No API key was entered. Run npm run setup again when you have one.");
+    key = next.value.trim();
+    if (!process.stdin.isTTY) process.stdout.write("\n");
     if (!key) continue;
     const check = await keyWorks(key);
     if (check === "ok") break;
@@ -92,15 +98,19 @@ if (!key) {
   }
   rl.close();
   env = /^ANTHROPIC_API_KEY=.*$/m.test(env) ? env.replace(/^ANTHROPIC_API_KEY=.*$/m, `ANTHROPIC_API_KEY=${key}`) : `ANTHROPIC_API_KEY=${key}\n${env}`;
-  fs.writeFileSync(envFile, env, { mode: 0o600 });
+  fs.writeFileSync(envFile, env);
+  fs.chmodSync(envFile, 0o600);
 }
 ok("Anthropic API key is saved in .env.local");
 
 // 4. Database
 if (wantsLocalDatabase()) {
-  const db = await startLocalDatabase().catch((e) => fail(e.message));
-  await db.stop();
-  ok("Built-in database is ready (in data/pg)");
+  if (await localDatabaseRunning()) ok("Built-in database is ready (Panel is running)");
+  else {
+    const db = await startLocalDatabase().catch((e) => fail(e.message));
+    await db.stop();
+    ok("Built-in database is ready (in data/pg)");
+  }
 } else ok("Using the database set in DATABASE_URL");
 
 console.log("\nAll set. Start Panel with:\n\n    npm run dev\n\nthen open http://127.0.0.1:3000\n");
