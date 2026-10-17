@@ -9,6 +9,7 @@ import { AiUnavailable, BudgetExceeded } from "@/ai/client";
 import { denseSample } from "@/media/pipeline";
 import { perceiveFrames } from "@/ai/perceive";
 import { evidenceSpan, type Ledger } from "@/core/evidence";
+import { assertCanAskFollowup, LimitReached } from "@/server/budget";
 
 const Body = z.object({ reviewerId: z.string(), message: z.string().trim().min(1).max(2000) });
 
@@ -60,6 +61,13 @@ export async function POST(req: Request, ctx: RouteContext<"/api/reviews/[id]/ch
   if (!r.board.includes(parsed.data.reviewerId)) return Response.json({ error: "That reviewer isn't on this panel." }, { status: 400 });
   const profile = getProfile(parsed.data.reviewerId);
   if (!profile) return Response.json({ error: "That reviewer is no longer available." }, { status: 400 });
+
+  try {
+    assertCanAskFollowup(id);
+  } catch (e) {
+    if (e instanceof LimitReached) return Response.json({ error: e.message }, { status: 429 });
+    throw e;
+  }
 
   const ledger = r.ledger;
   const history = getThread(id, profile.id);

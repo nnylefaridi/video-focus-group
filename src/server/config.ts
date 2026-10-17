@@ -14,7 +14,22 @@ export const LIMITS = {
   maxDimension: 4096,
 };
 
-export const COST_CAP_USD = Number(process.env.REVIEW_COST_CAP_USD ?? 3);
+const num = (v: string | undefined, fallback: number) => {
+  const n = Number(v);
+  return Number.isFinite(n) && n > 0 ? n : fallback;
+};
+
+/** Spending protection for your API key. Override any of these in .env.local. */
+export const COST_CAP_USD = num(process.env.REVIEW_COST_CAP_USD, 3);
+export const SPEND_LIMITS = {
+  dailyUsd: num(process.env.DAILY_LIMIT_USD, 10),
+  monthlyUsd: num(process.env.MONTHLY_LIMIT_USD, 40),
+  maxReviewsPerDay: num(process.env.MAX_REVIEWS_PER_DAY, 8),
+  maxFollowupsPerReview: num(process.env.MAX_FOLLOWUPS_PER_REVIEW, 20),
+  maxAnswerChecksPerHour: num(process.env.MAX_ANSWER_CHECKS_PER_HOUR, 60),
+  /** Rough cost of one full review, used to refuse starting one that can't finish within budget. */
+  typicalReviewUsd: 1.5,
+};
 
 fs.mkdirSync(MEDIA_DIR, { recursive: true });
 

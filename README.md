@@ -30,7 +30,7 @@ Everything runs locally on your Mac.
 npm run dev
 ```
 
-Open http://localhost:3000. This starts the web app and the background worker that processes videos. After changing `.env.local`, stop with Ctrl+C and start it again.
+Open http://127.0.0.1:3000 (or http://localhost:3000). This starts the web app and the background worker that processes videos. After changing `.env.local`, stop with Ctrl+C and start it again.
 
 ## How a review works
 
@@ -42,7 +42,22 @@ Open http://localhost:3000. This starts the web app and the background worker th
 6. **The board.** In a paper puppet theatre, each reviewer is a cutout on a popsicle stick behind an origami table. The speaker's puppet wags while their line appears under the flat video player (whose CC button shows captions made from the transcript). The independent notes become a discussion with real disagreements, a comparison of where reviewers agree and differ, and a plan: *change these first*, *worth trying*, *keep these*.
 7. **Ask.** Chat with any reviewer. They can take a closer look at any moment, re-sampling it at 8 frames per second.
 
-Each review has a spending cap of $3 by default. Set `REVIEW_COST_CAP_USD` in `.env.local` to change it.
+## Protecting your API key and budget
+
+- **Only this computer can use the app.** The servers listen on `127.0.0.1`, so other devices on your network can't reach it or spend your key.
+- **Spending caps**, checked before every paid call (answer checks, reviews and follow-ups). Change any of them in `.env.local`:
+
+  | Setting | Default | What happens when it's reached |
+  |---|---|---|
+  | `DAILY_LIMIT_USD` | 10 | No more paid calls until midnight |
+  | `MONTHLY_LIMIT_USD` | 40 | No more paid calls until the 1st |
+  | `REVIEW_COST_CAP_USD` | 3 | That review (and its follow-ups) stops spending |
+  | `MAX_REVIEWS_PER_DAY` | 8 | New reviews are refused until midnight |
+  | `MAX_FOLLOWUPS_PER_REVIEW` | 20 | No more follow-up questions on that review |
+  | `MAX_ANSWER_CHECKS_PER_HOUR` | 60 | Questionnaire answers pause for a bit |
+
+  A new review is also refused if less than about $1.50 (a typical review) is left in today's or this month's budget. Today's and this month's spend are shown on the **Your reviews** page.
+- **Hard backstop:** also set a monthly spend limit for your key in the Anthropic Console (Settings → Limits). That limit is enforced by Anthropic even if something here goes wrong.
 
 ## Reviewers
 

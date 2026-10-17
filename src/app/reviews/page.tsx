@@ -4,6 +4,18 @@ import { connection } from "next/server";
 import { listReviews } from "@/server/reviews";
 import { getProfile } from "@/experts/load";
 import { STAGE_LABELS } from "@/core/review";
+import { spendSummary } from "@/server/budget";
+
+async function Spend() {
+  await connection();
+  const s = spendSummary();
+  const m = (n: number) => `$${n.toFixed(2)}`;
+  return (
+    <p className="mt-3 text-sm font-semibold text-ink-soft">
+      API spend: {m(s.today)} of {m(s.dailyLimit)} today · {m(s.month)} of {m(s.monthlyLimit)} this month
+    </p>
+  );
+}
 
 async function List() {
   await connection();
@@ -58,6 +70,7 @@ export default function ReviewsPage() {
         </Link>
       </div>
       <Suspense>
+        <Spend />
         <List />
       </Suspense>
     </main>

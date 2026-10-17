@@ -4,6 +4,7 @@ import { isComplete, resolve, type Answer } from "@/core/questionnaire/engine";
 import { liveProfiles } from "@/experts/load";
 import { createReview, listReviews, newReviewId } from "@/server/reviews";
 import { hasAnthropicKey } from "@/server/config";
+import { assertCanStartReview, LimitReached } from "@/server/budget";
 
 const Body = z.object({
   answers: z.array(z.object({ questionId: z.string(), display: z.string(), fields: z.record(z.string(), z.unknown()), skipped: z.boolean().optional() })),
@@ -18,6 +19,12 @@ export async function GET() {
 export async function POST(req: Request) {
   if (!hasAnthropicKey()) {
     return Response.json({ error: "ANTHROPIC_API_KEY is not set. Add it to .env.local and restart the app." }, { status: 503 });
+  }
+  try {
+    assertCanStartReview();
+  } catch (e) {
+    if (e instanceof LimitReached) return Response.json({ error: e.message }, { status: 429 });
+    throw e;
   }
   const parsed = Body.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return Response.json({ error: "Invalid request" }, { status: 400 });

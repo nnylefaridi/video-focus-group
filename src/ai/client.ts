@@ -3,6 +3,7 @@ import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import type { z } from "zod";
 import { addCost, getReview } from "@/server/reviews";
 import { COST_CAP_USD } from "@/server/config";
+import { assertWithinSpendLimits, LimitReached, recordSpend } from "@/server/budget";
 
 export const MODELS = {
   fast: "claude-haiku-5-5",
@@ -47,7 +48,14 @@ type CallOpts<S extends z.ZodType> = {
   maxTokens?: number;
 };
 
+/** Checked before every paid call: app-wide daily/monthly caps, then this review's own cap. */
 function checkBudget(reviewId?: string) {
+  try {
+    assertWithinSpendLimits();
+  } catch (e) {
+    if (e instanceof LimitReached) throw new BudgetExceeded(e.message);
+    throw e;
+  }
   if (!reviewId) return;
   const r = getReview(reviewId);
   if (r && r.cost.usd >= COST_CAP_USD) {
@@ -72,6 +80,7 @@ export async function callStructured<S extends z.ZodType>(opts: CallOpts<S>): Pr
   });
   const msg = await stream.finalMessage();
   const usd = priceOf(opts.model, msg.usage);
+  recordSpend({ label: opts.label, model: opts.model, usd, reviewId: opts.reviewId });
   if (opts.reviewId) {
     addCost(opts.reviewId, { label: opts.label, model: opts.model, usd, inTok: msg.usage.input_tokens, outTok: msg.usage.output_tokens });
   }
@@ -98,6 +107,7 @@ export async function* streamText(opts: Omit<CallOpts<z.ZodType>, "schema"> & { 
     if (ev.type === "content_block_delta" && ev.delta.type === "text_delta") yield { type: "text" as const, text: ev.delta.text };
   }
   const msg = await stream.finalMessage();
+  recordSpend({ label: opts.label, model: opts.model, usd: priceOf(opts.model, msg.usage), reviewId: opts.reviewId });
   if (opts.reviewId) {
     addCost(opts.reviewId, {
       label: opts.label,

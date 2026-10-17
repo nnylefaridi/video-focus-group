@@ -48,3 +48,7 @@ next-env.d.ts
 /tests/eval/out/
 /test-results/
 /playwright-report/
+
+# source images for the reviewer stickers (kept locally, not tracked)
+/Cutouts/
+/cutouts.jpeg

@@ -2,7 +2,8 @@ import { z } from "zod";
 import { QUESTION_BY_ID } from "@/core/questionnaire/graph";
 import { resolve, type Answer } from "@/core/questionnaire/engine";
 import { interpretAnswer } from "@/ai/interpret";
-import { AiUnavailable } from "@/ai/client";
+import { AiUnavailable, BudgetExceeded } from "@/ai/client";
+import { assertCanInterpret, LimitReached } from "@/server/budget";
 
 const Body = z.object({
   questionId: z.string(),
@@ -19,11 +20,18 @@ export async function POST(req: Request) {
   // Earlier answers, minus the one being (re)answered.
   const earlier = (parsed.data.answers as Answer[]).filter((a) => a.questionId !== q.id);
   try {
+    assertCanInterpret();
+  } catch (e) {
+    if (e instanceof LimitReached) return Response.json({ error: e.message }, { status: 429 });
+    throw e;
+  }
+  try {
     const fields = await interpretAnswer(q, parsed.data.raw, resolve(earlier).fields);
     return Response.json({ fields });
   } catch (e) {
-    const message = e instanceof AiUnavailable ? e.message : "Couldn't read that answer just now. Please try again.";
+    const known = e instanceof AiUnavailable || e instanceof BudgetExceeded;
+    const message = known ? e.message : "Couldn't read that answer just now. Please try again.";
     console.error("[interpret]", e);
-    return Response.json({ error: message }, { status: e instanceof AiUnavailable ? 503 : 502 });
+    return Response.json({ error: message }, { status: e instanceof BudgetExceeded ? 429 : e instanceof AiUnavailable ? 503 : 502 });
   }
 }
