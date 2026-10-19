@@ -52,3 +52,7 @@ next-env.d.ts
 # source images for the reviewer stickers (kept locally, not tracked)
 /Cutouts/
 /cutouts.jpeg
+
+# screen recordings and exported videos dropped in the project folder
+/*.mp4
+/*.mov

@@ -31,6 +31,18 @@ function anthropic(): Anthropic {
   return client;
 }
 
+/**
+ * Problems with the key or the account won't go away by trying again, so they're
+ * reported as AiUnavailable with what to do, instead of a generic "try again".
+ */
+function accountProblem(e: unknown): Error {
+  if (!(e instanceof Anthropic.APIError)) return e as Error;
+  if (e.status === 401) return new AiUnavailable("Anthropic rejected the API key in .env.local. Run npm run setup to enter a working key, then restart Panel.");
+  if (e.status === 403) return new AiUnavailable("This Anthropic API key isn't allowed to use the models Panel needs. Check the key's workspace in the Anthropic Console.");
+  if (e.status === 400 && /credit balance|billing/i.test(e.message)) return new AiUnavailable("Your Anthropic account is out of credits. Add some under Settings → Billing in the Anthropic Console, then try again.");
+  return e;
+}
+
 function priceOf(model: ModelId, usage: Anthropic.Beta.BetaUsage): number {
   const [i, o, c] = PRICES[model];
   const cacheWrite = (usage.cache_creation_input_tokens ?? 0) * i * 1.25;
@@ -78,7 +90,9 @@ export async function callStructured<S extends z.ZodType>(opts: CallOpts<S>): Pr
     output_config: { format: betaZodOutputFormat(opts.schema), ...(opts.effort ? { effort: opts.effort } : {}) },
     ...(useFallbacks ? { betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" as const } : {}),
   });
-  const msg = await stream.finalMessage();
+  const msg = await stream.finalMessage().catch((e) => {
+    throw accountProblem(e);
+  });
   const usd = priceOf(opts.model, msg.usage);
   await recordSpend({ label: opts.label, model: opts.model, usd, reviewId: opts.reviewId });
   if (opts.reviewId) {
@@ -103,8 +117,12 @@ export async function* streamText(opts: Omit<CallOpts<z.ZodType>, "schema"> & { 
     betas: ["server-side-fallback-2026-07-01"],
     fallbacks: "default",
   });
-  for await (const ev of stream) {
-    if (ev.type === "content_block_delta" && ev.delta.type === "text_delta") yield { type: "text" as const, text: ev.delta.text };
+  try {
+    for await (const ev of stream) {
+      if (ev.type === "content_block_delta" && ev.delta.type === "text_delta") yield { type: "text" as const, text: ev.delta.text };
+    }
+  } catch (e) {
+    throw accountProblem(e);
   }
   const msg = await stream.finalMessage();
   await recordSpend({ label: opts.label, model: opts.model, usd: priceOf(opts.model, msg.usage), reviewId: opts.reviewId });

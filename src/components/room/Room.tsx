@@ -38,8 +38,9 @@ export function Room({ id }: { id: string }) {
   useEffect(() => {
     let alive = true;
     const tick = async () => {
-      const res = await fetch(`/api/reviews/${id}`, { cache: "no-store" });
-      if (!alive) return;
+      // Offline for a moment (Panel restarting): keep the last view and try again on the next tick.
+      const res = await fetch(`/api/reviews/${id}`, { cache: "no-store" }).catch(() => null);
+      if (!alive || !res) return;
       if (res.status === 404) setMissing(true);
       else if (res.ok) setView(await res.json());
     };

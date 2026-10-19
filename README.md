@@ -2,7 +2,9 @@
 
 Show a short video to a paper-puppet board of AI reviewers modeled on well-known people in your field. Panel opens straight on a question, recommends a board for your niche, and returns timestamped, evidence-backed feedback with a revision plan. Reviewers are AI interpretations built from each person's published work. They don't take part in or endorse any review.
 
-Panel runs on your own Mac. Your videos and reviews stay on your computer, and the only outside service it uses is Anthropic's API, with your own key.
+> **About the reviewers.** Panel isn't affiliated with, sponsored by or endorsed by any of the people it names (Mark Rober, Casey Neistat, MrBeast, Alex Hormozi and the others in `src/experts/profiles`). Each reviewer is Claude prompted with a summary of that person's public talks, books and interviews, linked to its sources. What a reviewer says is the model's reading of those ideas, not the person's opinion, and the cartoon likenesses are illustrations, not their photos or logos.
+
+Panel runs on your own Mac. Your videos and reviews are stored on your computer. To review a video, Panel sends sampled frames and the transcript to Anthropic's API with your own key; that's the only outside service it uses (plus a one-time download of the speech-to-text model during setup).
 
 ## What you need
 
@@ -88,6 +90,7 @@ A new review is also refused if less than about $1.50 is left in today's or this
 | `npm run setup` says a tool is missing | Run `brew install ffmpeg whisper-cpp`, then `npm run setup` again. |
 | `command not found: npm` or `brew` | Install [Homebrew](https://brew.sh), then `brew install node`. Close and reopen Terminal. |
 | "Anthropic rejected that key" | Copy the whole key again from the Anthropic Console (it starts with `sk-ant-`), and check billing is set up. |
+| "Anthropic rejected the API key in .env.local" or "out of credits" | Run `npm run setup` and paste a working key, or add credits under **Settings → Billing** in the Anthropic Console. Then restart Panel. |
 | "Panel is already running in another Terminal window" | Use that window, or press Ctrl + C there first. |
 | "Port 3000 is already in use" | Something else uses port 3000. Run `PORT=3001 npm run dev` and open http://127.0.0.1:3001. |
 | A limit message ("budget is used up", "daily limit") | It resets at the time it says. To raise it, see [Spending limits](#spending-limits). |
@@ -173,3 +176,7 @@ npm run kb:validate -- --urls    # also check every source link
 | `supabase/migrations` | Database tables and the storage bucket (applied automatically) |
 | `worker/` | Background worker loop (processing, and copying kept reviews' media to storage) |
 | `data/` | Media, the built-in database, the speech model (git-ignored) |
+
+## License
+
+The code is released under the [MIT License](LICENSE). The names of the people Panel's reviewers are modeled on, and their likenesses, belong to those people and aren't covered by it.
