@@ -5,7 +5,7 @@ import { liveProfiles } from "@/experts/load";
 import { listReviewsFor, newReviewId } from "@/server/reviews";
 import { hasAnthropicKey } from "@/server/config";
 import { startReview, LimitReached, limitResponse } from "@/server/budget";
-import { authReady, ensureAnonId, getViewer } from "@/server/auth";
+import { authReady, ensureAnonId, getViewer, mustSignIn, signInResponse } from "@/server/auth";
 import { whoIsCalling } from "@/server/client";
 
 const Body = z.object({
@@ -21,6 +21,9 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
+  // Hosted mode: a review is only made for someone signed in.
+  const viewer = await getViewer();
+  if (mustSignIn(viewer)) return signInResponse();
   if (!hasAnthropicKey()) {
     return Response.json({ error: "ANTHROPIC_API_KEY is not set. Add it to .env.local and restart the app." }, { status: 503 });
   }
@@ -37,7 +40,6 @@ export async function POST(req: Request) {
   }
 
   // Signed in: the review is the account's. Signed out: it's this browser's until sign-in.
-  const viewer = await getViewer();
   const anonId = viewer.userId ? null : await ensureAnonId(viewer);
   const id = newReviewId();
   const title = (fields.summary ?? "Untitled video").slice(0, 120);

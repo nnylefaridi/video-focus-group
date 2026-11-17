@@ -1,6 +1,29 @@
 import path from "node:path";
 import fs from "node:fs";
 import crypto from "node:crypto";
+import { parseMode, publicOriginOf, type Mode } from "./mode.mjs";
+
+export type { Mode };
+
+/**
+ * How this copy of Panel runs: "local" (the default: one person on their own computer)
+ * or "hosted" (PANEL_MODE=hosted: a public site, where people sign in before anything
+ * paid runs). Startup refuses any other value, so this only throws if that was skipped.
+ */
+export function getMode(): Mode {
+  return parseMode(process.env.PANEL_MODE);
+}
+
+export function isHosted(): boolean {
+  return getMode() === "hosted";
+}
+
+/** Hosted mode's public address (HOSTED_PUBLIC_URL), where sign-in and payments send people back to. */
+export function hostedOrigin(): string {
+  const origin = publicOriginOf(process.env.HOSTED_PUBLIC_URL);
+  if (!origin) throw new Error("HOSTED_PUBLIC_URL isn't set to the site's public https address. Set it and restart Panel.");
+  return origin;
+}
 
 export const DATA_DIR = path.resolve(/* turbopackIgnore: true */ process.env.DATA_DIR ?? path.join(/* turbopackIgnore: true */ process.cwd(), "data"));
 export const MEDIA_DIR = path.join(DATA_DIR, "media");

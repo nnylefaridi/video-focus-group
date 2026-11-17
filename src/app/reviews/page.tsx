@@ -8,6 +8,7 @@ import { STAGE_LABELS } from "@/core/review";
 import { spendSummary, usageFor } from "@/server/budget";
 import { authReady, claimForViewer, getViewer } from "@/server/auth";
 import { whoIsCalling } from "@/server/client";
+import { isHosted } from "@/server/config";
 import { SignOut } from "@/components/account/SignOut";
 
 const isOwner = (email: string | null) =>
@@ -97,11 +98,19 @@ async function List({ userId }: { userId: string | null }) {
 
 /** Signed out: explain why an account is needed, and send them to log in. */
 function LoginGate() {
+  // Hosted mode: reviews are only made signed in, so there's nothing in this browser to move.
+  const hosted = isHosted();
   return (
     <div className="cutout-lift mt-8 -rotate-[0.3deg] p-6 sm:p-8">
-      <h2 className="font-display text-xl font-extrabold text-ink">Log in to keep a record of your reviews</h2>
+      <h2 className="font-display text-xl font-extrabold text-ink">{hosted ? "Log in to see your reviews" : "Log in to keep a record of your reviews"}</h2>
       <p className="mt-2 text-ink-soft">
-        Without an account, a review stays with the browser that made it and isn&apos;t listed anywhere. Log in or sign up, and the reviews you&apos;ve made in this browser, with their videos, move into your account.
+        {hosted ? (
+          <>Your reviews, their videos and your follow-up chats are kept in your account.</>
+        ) : (
+          <>
+            Without an account, a review stays with the browser that made it and isn&apos;t listed anywhere. Log in or sign up, and the reviews you&apos;ve made in this browser, with their videos, move into your account.
+          </>
+        )}
       </p>
       <Link href="/login?next=/reviews" className="mt-5 inline-block rounded-full bg-accent px-6 py-2.5 font-bold text-accent-ink transition-all hover:brightness-110">
         Log in or sign up

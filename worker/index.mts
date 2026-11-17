@@ -7,6 +7,10 @@ import { processReview } from "../src/server/process";
 import { storeReviewMedia } from "../src/server/storage";
 import { cleanupAbandonedUploads, getReview, updateReview } from "../src/server/reviews";
 import { AiUnavailable, BudgetExceeded } from "../src/ai/client";
+import { isHosted } from "../src/server/config";
+import { exitUnlessReady, startupEnv } from "../src/server/mode.mjs";
+
+exitUnlessReady(startupEnv());
 
 await requeueStale().catch((e) => console.error("[worker] can't reach the database:", e instanceof Error ? e.message : e));
 let lastCleanup = 0;
@@ -45,7 +49,12 @@ while (!stopping) {
   const started = Date.now();
   console.log(`[worker] job ${job.id} ${job.kind} for ${job.reviewId}`);
   try {
-    if (job.kind === "process") await processReview(job.reviewId);
+    if (job.kind === "process") {
+      // Hosted mode never runs a paid review for someone who isn't signed in (the website refuses
+      // to make one; this also covers reviews left from before the switch to hosted mode).
+      if (isHosted() && !(await getReview(job.reviewId))?.userId) throw new Error("Log in to run this review.");
+      await processReview(job.reviewId);
+    }
     else if (job.kind === "store") await storeReviewMedia(job.reviewId);
     await finishJob(job.id);
     const r = await getReview(job.reviewId);

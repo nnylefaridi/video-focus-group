@@ -2,8 +2,11 @@
 // Without DATABASE_URL in .env.local, it also runs the built-in local database.
 import { spawn } from "node:child_process";
 import { LocalDatabaseError, startLocalDatabase, wantsLocalDatabase } from "./local-db.mjs";
+import { exitUnlessReady, startupEnv } from "../src/server/mode.mjs";
 
-const db = wantsLocalDatabase()
+// Hosted mode (PANEL_MODE=hosted) needs its settings first, and its own database.
+const mode = exitUnlessReady(startupEnv(process.cwd(), "development"));
+const db = mode === "local" && wantsLocalDatabase()
   ? await startLocalDatabase().catch((e) => {
       console.error(`\n${e instanceof LocalDatabaseError ? e.message : e}\n`);
       process.exit(1);
@@ -12,7 +15,7 @@ const db = wantsLocalDatabase()
 if (db) process.env.DATABASE_URL = db.url;
 
 const procs = [
-  // Bound to this computer only (see server.mjs), so nobody else on your network can use your API key.
+  // In local mode, bound to this computer only (see server.mjs), so nobody else on your network can use your API key.
   spawn("node", ["server.mjs", "--dev"], { stdio: "inherit" }),
   spawn("npx", ["tsx", "watch", "--env-file-if-exists=.env.local", "worker/index.mts"], { stdio: "inherit" }),
 ];

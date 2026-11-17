@@ -2,7 +2,7 @@ import { z } from "zod";
 import { connection } from "next/server";
 import type Anthropic from "@anthropic-ai/sdk";
 import { reviewDir, updateReview, type ReviewRecord } from "@/server/reviews";
-import { accessibleReview } from "@/server/auth";
+import { accessibleReview, mustSignIn, signInResponse } from "@/server/auth";
 import { whoIsCalling } from "@/server/client";
 import { enqueue } from "@/server/jobs";
 import { restoreFile } from "@/server/storage";
@@ -68,6 +68,7 @@ export async function POST(req: Request, ctx: RouteContext<"/api/reviews/[id]/ch
   const found = await accessibleReview(id);
   const r = found?.review;
   if (!found || !r) return Response.json({ error: "Not found" }, { status: 404 });
+  if (mustSignIn(found.viewer)) return signInResponse("Log in to ask a reviewer.");
   if (!r.ledger) return Response.json({ error: "This review isn't ready yet." }, { status: 409 });
   if (!r.board.includes(parsed.data.reviewerId)) return Response.json({ error: "That reviewer isn't on this panel." }, { status: 400 });
   const profile = getProfile(parsed.data.reviewerId);

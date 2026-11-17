@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { Nunito } from "next/font/google";
 import "./globals.css";
 import { CoffeeLink } from "@/components/CoffeeLink";
@@ -19,7 +20,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="min-h-full">
         <div className="paper-margin" aria-hidden />
         <div className="relative z-[1]">{children}</div>
-        <CoffeeLink />
+        {/* Reads the path (it stays off the first screen), which a review's id only gives at request time. */}
+        <Suspense>
+          <CoffeeLink />
+        </Suspense>
       </body>
     </html>
   );

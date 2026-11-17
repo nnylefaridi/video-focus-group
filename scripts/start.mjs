@@ -2,8 +2,11 @@
 // and the background worker together, plus the local database when DATABASE_URL isn't set.
 import { spawn } from "node:child_process";
 import { LocalDatabaseError, startLocalDatabase, wantsLocalDatabase } from "./local-db.mjs";
+import { exitUnlessReady, startupEnv } from "../src/server/mode.mjs";
 
-const db = wantsLocalDatabase()
+// Hosted mode (PANEL_MODE=hosted) needs its settings first, and its own database.
+const mode = exitUnlessReady(startupEnv(process.cwd(), "production"));
+const db = mode === "local" && wantsLocalDatabase()
   ? await startLocalDatabase().catch((e) => {
       console.error(`\n${e instanceof LocalDatabaseError ? e.message : e}\n`);
       process.exit(1);

@@ -9,24 +9,44 @@ import type { ExpertCard } from "@/core/expert";
 import { QuestionStep } from "./QuestionStep";
 import { BoardStep } from "./BoardStep";
 import { UploadStep } from "./UploadStep";
+import { SignInStep } from "./SignInStep";
 import { Puppet } from "../puppets/Puppet";
+import { useFirstScreen } from "../CoffeeLink";
 
 type Step = "questions" | "board" | "upload";
+
+/** The very first screen: the first question, nothing answered yet. Only it and its answer box show. */
+export function isFirstScreen(step: Step, answers: Answer[], editing: string | null): boolean {
+  return step === "questions" && answers.length === 0 && !editing;
+}
 type Saved = { answers: Answer[]; step: Step; board: string[] | null; editing: string | null };
 
 const KEY = "panel.flow.v1";
+/**
+ * A copy kept while someone goes to log in, for when they come back in another tab
+ * (an email confirmation link opens one). This tab's own session copy comes first.
+ */
+const PENDING_KEY = "panel.flow.pending.v1";
+const PENDING_MS = 24 * 60 * 60 * 1000;
 
 function load(): Saved | null {
   try {
     const raw = sessionStorage.getItem(KEY);
-    return raw ? (JSON.parse(raw) as Saved) : null;
+    if (raw) return JSON.parse(raw) as Saved;
+    const pending = localStorage.getItem(PENDING_KEY);
+    if (!pending) return null;
+    const { at, ...flow } = JSON.parse(pending) as Saved & { at: number };
+    return Date.now() - at < PENDING_MS ? flow : null;
   } catch {
     return null;
   }
 }
 
-/** Client-only (see FlowLoader): restores an in-progress flow from this tab's session. */
-export function Flow() {
+/**
+ * Client-only (see FlowLoader): restores an in-progress flow from this tab's session.
+ * `signInFirst` (hosted mode, signed out) puts a log-in step where the upload would be.
+ */
+export function Flow({ signInFirst = false }: { signInFirst?: boolean }) {
   const [saved] = useState(load);
   const [answers, setAnswers] = useState<Answer[]>(saved?.answers ?? []);
   const [step, setStep] = useState<Step>(saved?.step ?? "questions");
@@ -45,6 +65,14 @@ export function Flow() {
     }
   }, [answers, step, boardIds, editing]);
 
+  // Signed in (or no sign-in needed): any copy kept for the way back from logging in is done with.
+  useEffect(() => {
+    if (signInFirst) return;
+    try {
+      localStorage.removeItem(PENDING_KEY);
+    } catch {}
+  }, [signInFirst]);
+
   const { fields } = useMemo(() => resolve(answers), [answers]);
 
   // Recommend a board whenever the intent changes (once we know the category).
@@ -61,6 +89,8 @@ export function Flow() {
       .catch(() => {});
     return () => ctrl.abort();
   }, [fields]);
+
+  useFirstScreen(isFirstScreen(step, answers, editing));
 
   const current: QuestionNode | null = editing ? (QUESTION_BY_ID.get(editing) ?? null) : nextQuestion(answers);
 
@@ -136,7 +166,23 @@ export function Flow() {
           </motion.div>
         )}
 
-        {step === "upload" && (
+        {step === "upload" && signInFirst && (
+          <motion.div key="signin" initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="flex flex-1 flex-col justify-center py-16">
+            <SignInStep
+              board={boardCards}
+              onBack={() => setStep("board")}
+              onLeave={() => {
+                try {
+                  localStorage.setItem(PENDING_KEY, JSON.stringify({ answers, step: "upload", board: effectiveBoard, editing: null, at: Date.now() }));
+                } catch {
+                  /* storage unavailable: this tab's session copy still brings them back */
+                }
+              }}
+            />
+          </motion.div>
+        )}
+
+        {step === "upload" && !signInFirst && (
           <motion.div key="upload" initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="flex flex-1 flex-col justify-center py-16">
             <UploadStep
               answers={answers}

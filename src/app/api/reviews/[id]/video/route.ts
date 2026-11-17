@@ -5,7 +5,7 @@ import { pipeline } from "node:stream/promises";
 import { Transform } from "node:stream";
 import { LIMITS } from "@/server/config";
 import { deleteReview, reviewDir, updateReview } from "@/server/reviews";
-import { accessibleReview } from "@/server/auth";
+import { accessibleReview, mustSignIn, signInResponse } from "@/server/auth";
 import { enqueue } from "@/server/jobs";
 import { probe, sniffContainer, UploadRejected } from "@/media/probe";
 
@@ -13,8 +13,10 @@ class TooLarge extends Error {}
 
 export async function PUT(req: Request, ctx: RouteContext<"/api/reviews/[id]/video">) {
   const { id } = await ctx.params;
-  const review = (await accessibleReview(id))?.review;
-  if (!review) return Response.json({ error: "Not found" }, { status: 404 });
+  const found = await accessibleReview(id);
+  if (!found) return Response.json({ error: "Not found" }, { status: 404 });
+  if (mustSignIn(found.viewer)) return signInResponse();
+  const { review } = found;
   if (review.stage !== "uploading") return Response.json({ error: "This review already has a video." }, { status: 409 });
 
   const declared = Number(req.headers.get("content-length") ?? 0);

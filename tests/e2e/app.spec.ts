@@ -16,10 +16,15 @@ test("the first screen is only the first question and its answer box", async ({ 
   // The only other control is the answer box's own send button.
   await expect(main.getByRole("button")).toHaveCount(1);
   await expect(main.getByRole("button", { name: "Continue" })).toBeDisabled();
-  // The only link on the page is the small Buy Me A Coffee tag in the corner.
-  await expect(page.getByRole("link")).toHaveCount(1);
-  await expect(page.getByRole("link", { name: "Buy me a coffee" })).toHaveAttribute("href", "https://buymeacoffee.com/nylefaridi");
+  // No links at all, not even the Buy me a coffee tag, and not in the server's HTML either.
+  await expect(page.getByRole("link")).toHaveCount(0);
   await expect(page.locator("header, footer, nav")).toHaveCount(0);
+  expect(await (await page.request.get("/")).text()).not.toContain("buymeacoffee.com");
+});
+
+test("the Buy me a coffee tag is on every screen after the first", async ({ page }) => {
+  await page.goto("/reviews");
+  await expect(page.getByRole("link", { name: "Buy me a coffee" })).toHaveAttribute("href", "https://buymeacoffee.com/nylefaridi");
 });
 
 test("suggestions appear only once the answer box is clicked", async ({ page, isMobile }) => {

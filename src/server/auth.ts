@@ -6,6 +6,7 @@ import { authReady, SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from "@/lib/supabas
 export { authReady };
 import { canAccess, claimAnonymous, getReview, type ReviewRecord } from "./reviews";
 import { enqueue } from "./jobs";
+import { isHosted } from "./config";
 
 export async function supabaseServer() {
   const store = await cookies();
@@ -37,6 +38,19 @@ export async function getViewer(): Promise<Viewer> {
   const { data } = await (await supabaseServer()).auth.getClaims();
   const claims = data?.claims;
   return { userId: claims?.sub ?? null, email: typeof claims?.email === "string" ? claims.email : null, anonId };
+}
+
+/**
+ * Hosted mode: nothing paid (a review, an upload, a retry, a follow-up) runs for someone
+ * who isn't signed in. Answer checks are the exception; they're capped per network.
+ */
+export function mustSignIn(viewer: Pick<Viewer, "userId">): boolean {
+  return isHosted() && !viewer.userId;
+}
+
+/** What a route sends back when it needs sign-in first. The flow shows a Log in link for it. */
+export function signInResponse(message = "Log in to send your video to the board.") {
+  return Response.json({ error: message, login: true }, { status: 401 });
 }
 
 /** Route handlers only: the browser's anonymous id, created on first use. */

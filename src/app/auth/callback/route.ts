@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import type { EmailOtpType } from "@supabase/supabase-js";
 import { safeNext } from "@/lib/supabase";
 import { claimForViewer, getViewer, supabaseServer } from "@/server/auth";
+import { hostedOrigin, isHosted } from "@/server/config";
 
 /**
  * Where Google sign-in, email confirmation and password-reset links land. Finishes
@@ -13,7 +14,10 @@ export async function GET(req: Request) {
   const remembered = decodeURIComponent(req.headers.get("cookie")?.match(/(?:^|;\s*)panel_next=([^;]+)/)?.[1] ?? "");
   // Send the browser back to the exact host it used (127.0.0.1 vs localhost matters: the
   // sign-in cookie is set on that host). Next can report a different one in req.url.
-  const origin = `${req.headers.get("x-forwarded-proto") ?? url.protocol.replace(":", "")}://${req.headers.get("host") ?? url.host}`;
+  // Hosted mode: the site's public address, rather than whatever the proxy passed along.
+  const origin = isHosted()
+    ? hostedOrigin()
+    : `${req.headers.get("x-forwarded-proto") ?? url.protocol.replace(":", "")}://${req.headers.get("host") ?? url.host}`;
   const next = safeNext(url.searchParams.get("next") ?? remembered);
   const code = url.searchParams.get("code");
   const tokenHash = url.searchParams.get("token_hash");
