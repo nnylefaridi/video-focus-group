@@ -8,8 +8,8 @@ import { ArrowLeft, Spinner } from "../Icons";
 import { LoginHint } from "./LoginHint";
 
 const CHOICES: { method: PaymentMethod; label: string; cost: string }[] = [
-  { method: "credits", label: "Prepaid credits", cost: "You pay what the review costs us plus 20%." },
-  { method: "own_key", label: "My own Anthropic API key", cost: "Billed by Anthropic to your key. Video Focus Group charges nothing." },
+  { method: "credits", label: "Prepaid credits", cost: "Top up from $10 by card, through Stripe. Each review uses what it costs us plus 20%." },
+  { method: "own_key", label: "My own Anthropic API key", cost: "You add your key next. Anthropic bills your key; Video Focus Group charges nothing." },
 ];
 
 export const PAYMENT_LABELS: Record<PaymentMethod, string> = { credits: "prepaid credits", own_key: "your own Anthropic API key" };

@@ -59,3 +59,15 @@ test("other API calls and non-GET requests aren't redirected either", async () =
   const post = await request("/login", `127.0.0.1:${PORT}`, "POST");
   expect(post.headers.location).toBeUndefined();
 });
+
+test("signed out, the first screen has a small Log in link and still only the first question", async ({ page }) => {
+  await page.goto(`http://localhost:${PORT}/`);
+  const login = page.getByRole("link", { name: "Log in", exact: true });
+  await expect(login).toBeVisible();
+  await expect(login).toHaveAttribute("href", "/login?next=/");
+  await expect(page.locator("main").getByRole("textbox")).toHaveCount(1);
+  await expect(page.locator("main").getByRole("button")).toHaveCount(1);
+  await expect(page.getByRole("link")).toHaveCount(1);
+  await login.click();
+  await expect(page).toHaveURL(new RegExp(`localhost:${PORT}/login\\?next=%2F|/login\\?next=/`));
+});
