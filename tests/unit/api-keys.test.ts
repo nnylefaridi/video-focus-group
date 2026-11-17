@@ -170,6 +170,8 @@ async function giveCredit(userId: string) {
   return userId;
 }
 const call = (reviewId: string | null = null) => ai.callStructured({ label: "test", reviewId, model: ai.MODELS.fast, system: "s", messages: [{ role: "user", content: "hi" }], schema: z.object({ ok: z.boolean() }) });
+/** An answer check (no review) for an account paying with credits: on the server's key, charged to them. */
+const answerCheckOnCredits = async () => ai.asPayer({ userId: await giveCredit(signIn()), method: "credits" }, () => call());
 
 describe("encrypting keys at rest", () => {
   it("opens what it sealed, with a fresh 12-byte IV, a 16-byte tag and the key version each time", () => {
@@ -380,9 +382,12 @@ describe("running reviews on the owner's key", () => {
     expect(sdk.clients.at(-1)).toMatchObject({ apiKey: b.key, authToken: null });
     expect(sdk.clients.map((c) => c.apiKey)).not.toContain(process.env.ANTHROPIC_API_KEY);
 
-    // An answer check (no review) and a review on the server's key never see an own key.
+    // An answer check with nobody paying for it never runs, on any key.
     const before = sdk.clients.length;
-    await call();
+    await expect(call()).rejects.toThrow(ai.NO_PAYER);
+    expect(sdk.clients.length).toBe(before);
+    // One paid with credits, and a review on the server's key, never see an own key.
+    await answerCheckOnCredits();
     const serverReview = reviews.newReviewId();
     await reviews.createReview({ id: serverReview, answers: [], intent: {}, board, title: "t", userId: a.userId, paidWith: null });
     await call(serverReview);
@@ -468,7 +473,7 @@ describe("spending caps for reviews on their own key", () => {
 
     // The server's key still has its budget: answer checks and credits reviews go ahead.
     await expect(budget.assertWithinSpendLimits()).resolves.toBeTruthy();
-    await expect(call()).resolves.toEqual({ ok: true });
+    await expect(answerCheckOnCredits()).resolves.toEqual({ ok: true });
     await expect(start(await giveCredit(signIn()), "credits")).resolves.toBeUndefined();
 
     // This review's own cost cap still applies to it.
@@ -493,7 +498,7 @@ describe("spending caps for reviews on their own key", () => {
     await budget.recordSpend({ label: "test-global-cap", model: ai.MODELS.fast, usd: 1000, paidWith: null });
     try {
       // The server's key is out of budget...
-      await expect(call()).rejects.toBeInstanceOf(ai.BudgetExceeded);
+      await expect(answerCheckOnCredits()).rejects.toBeInstanceOf(ai.BudgetExceeded);
       await expect(callOnCredit()).rejects.toBeInstanceOf(ai.BudgetExceeded);
       await expect(start(await giveCredit(signIn()), "credits")).rejects.toThrow(/budget/);
       await expect(budget.spendFollowup(who(user), creditsReview)).rejects.toThrow(/budget/);
@@ -519,7 +524,7 @@ describe("every paid call for a review goes through the review's key", () => {
     expect((await db.q<{ p: string }>("SELECT paid_with::text AS p FROM app.spend WHERE review_id = $1", [id]))[0].p).toBe("own_key");
   });
 
-  it("makes Anthropic clients in only two places: the per-review client and the key check", () => {
+  it("makes Anthropic clients in only three places: the server's, the own-key one and the key check", () => {
     const ROOT = path.resolve(import.meta.dirname, "..", "..");
     const files: string[] = [];
     const walk = (dir: string) => {

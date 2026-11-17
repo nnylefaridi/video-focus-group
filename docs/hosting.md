@@ -78,7 +78,7 @@ curl https://example.com/api/health      # {"ok":true}
 | `MEDIA_SECRET` | yes | Keys the per-network limits (and signs local-mode media links). Keep it the same across restarts. | `openssl rand -base64 32` | 44 characters ending in `=` |
 | `STRIPE_SECRET_KEY` | yes | Creates Checkout Sessions. | Stripe → Developers → API keys | `sk_live_…` (or `sk_test_…`, or a restricted `rk_…` with Checkout Sessions write) |
 | `STRIPE_WEBHOOK_SECRET` | yes | Verifies Stripe's webhook calls. | Stripe → Developers → Webhooks → your endpoint → Signing secret | `whsec_…` |
-| `ANTHROPIC_API_KEY` | yes, in practice | The server's key, used for reviews paid with credits. Without it, credit reviews stop with a clear message. | console.anthropic.com → Settings → API Keys | `sk-ant-…` |
+| `ANTHROPIC_API_KEY` | yes, in practice | The server's key, used only for work paid with credits (reviews, follow-ups and answer checks of signed-in accounts with a balance). Visitors who haven't chosen how to pay never use it. Without it, credit work stops with a clear message. | console.anthropic.com → Settings → API Keys | `sk-ant-…` |
 | `CLIENT_IP_HEADER` | yes (this or `TRUSTED_PROXIES`) | Header the host overwrites with the visitor's address. | Set by `render.yaml` (`CF-Connecting-IP`) / `fly.toml` (`Fly-Client-IP`) | |
 | `TRUSTED_PROXIES` | see above | Number of proxies in front that each append to X-Forwarded-For. Not used on Render. | — | `1` |
 | `MAX_UPLOAD_MB` | no | Biggest prepared video in MB. Default 50 in hosted mode (Supabase Free's per-file cap), 250 locally. | You | `50` |

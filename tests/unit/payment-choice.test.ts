@@ -1,5 +1,6 @@
 /**
- * Hosted mode: how to pay is asked before the upload, and nothing is assumed. A saved choice
+ * Hosted mode: how to pay is asked on the first screen, in place of the first question, and
+ * the questions start only once the choice can pay. Nothing is assumed. A saved choice
  * that can't pay yet (own key picked once, no key saved) asks again instead of jumping
  * straight to the key form.
  */
@@ -8,10 +9,11 @@ import { renderToString } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import type { PaymentContext } from "@/server/billing";
 
-vi.mock("next/navigation", () => ({ usePathname: () => "/" }));
+vi.mock("next/navigation", () => ({ usePathname: () => "/", useRouter: () => ({ push: () => {} }) }));
 
-const { needsPaymentChoice } = await import("@/components/flow/Flow");
+const { needsPaymentChoice, startsWithPayment } = await import("@/components/flow/Flow");
 const { PaymentStep } = await import("@/components/flow/PaymentStep");
+const { StartPay } = await import("@/components/flow/StartPay");
 
 const credits = { available: 0, reviewReserve: 0 } as unknown as PaymentContext["credits"];
 const ctx = (over: Partial<PaymentContext>): PaymentContext => ({ method: null, ready: false, problem: null, key: null, credits, ...over });
@@ -58,5 +60,38 @@ describe("the payment question", () => {
     expect(out).toContain("My own Anthropic API key");
     expect(out).not.toContain('aria-checked="true"');
     expect(out).not.toMatch(/Add your Anthropic API key/);
+  });
+});
+
+describe("the first screen in hosted mode", () => {
+  it("asks how to pay instead of the first question until the choice can pay", () => {
+    expect(startsWithPayment(true, null, true)).toBe(true);
+    expect(startsWithPayment(true, null, false)).toBe(true);
+    expect(startsWithPayment(false, ctx({}), true)).toBe(true);
+    expect(startsWithPayment(false, ctx({ method: "own_key" }), true)).toBe(true);
+    expect(startsWithPayment(false, ctx({ method: "credits" }), true)).toBe(true);
+  });
+
+  it("goes straight to the first question for a returning account that can pay", () => {
+    expect(startsWithPayment(false, ctx({ method: "own_key", ready: true }), true)).toBe(false);
+    expect(startsWithPayment(false, ctx({ method: "credits", ready: true }), true)).toBe(false);
+  });
+
+  it("is the first question in local mode", () => {
+    expect(startsWithPayment(false, null, true)).toBe(false);
+  });
+
+  it("shows the two choices with their terms and the demo playing, muted", () => {
+    const out = renderToString(createElement(StartPay, { pay: null, onPayment: () => {} }));
+    expect(out).toContain("How do you want to pay?");
+    expect(out).toContain("Pay with credits");
+    expect(out).toContain("$10");
+    expect(out).toContain("plus 20%");
+    expect(out).toContain("Use your own Anthropic key");
+    expect(out).toMatch(/<video[^>]*src="\/demo.mp4"/);
+    expect(out).toMatch(/<video[^>]*autoPlay|<video[^>]*autoplay/i);
+    expect(out).toMatch(/<video[^>]*muted/);
+    expect(out).toMatch(/<video[^>]*playsInline|<video[^>]*playsinline/i);
+    expect(out).not.toMatch(/textarea/);
   });
 });

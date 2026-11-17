@@ -60,14 +60,41 @@ test("other API calls and non-GET requests aren't redirected either", async () =
   expect(post.headers.location).toBeUndefined();
 });
 
-test("signed out, the first screen has a small Log in link and still only the first question", async ({ page }) => {
+test("signed out, the first screen asks how to pay, with the demo playing and a small Log in link", async ({ page }) => {
   await page.goto(`http://localhost:${PORT}/`);
+  await expect(page.getByRole("heading", { name: "How do you want to pay?" })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Pay with credits/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Use your own Anthropic key/ })).toBeVisible();
+  // No questions yet: the server checks answers only on the visitor's own key or credits.
+  await expect(page.locator("main").getByRole("textbox")).toHaveCount(0);
+  const video = page.locator("main video");
+  await expect(video).toHaveAttribute("src", "/demo.mp4");
+  expect(await video.evaluate((v: HTMLVideoElement) => v.muted && v.loop && v.autoplay && v.playsInline)).toBe(true);
+  // It fits: nothing to scroll.
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollHeight <= window.innerHeight + 1)).toBe(true);
   const login = page.getByRole("link", { name: "Log in", exact: true });
-  await expect(login).toBeVisible();
   await expect(login).toHaveAttribute("href", "/login?next=/");
-  await expect(page.locator("main").getByRole("textbox")).toHaveCount(1);
-  await expect(page.locator("main").getByRole("button")).toHaveCount(1);
   await expect(page.getByRole("link")).toHaveCount(1);
-  await login.click();
-  await expect(page).toHaveURL(new RegExp(`localhost:${PORT}/login\\?next=%2F|/login\\?next=/`));
+  // Picking a way to pay signed out goes to log in first, and comes back here.
+  await page.getByRole("button", { name: /Use your own Anthropic key/ }).click();
+  await expect(page).toHaveURL(/\/login\?next=(%2F|\/)$/);
+  expect(await page.evaluate(() => localStorage.getItem("panel.pay.intent.v1"))).toBe("own_key");
+});
+
+test("signed out, an answer check is refused without touching any key", async () => {
+  const res = await new Promise<{ status: number; body: string }>((resolve, reject) => {
+    const body = JSON.stringify({ questionId: "what", raw: "A skit about my cat", answers: [] });
+    const r = http.request(
+      { host: "127.0.0.1", port: PORT, path: "/api/interpret", method: "POST", headers: { host: `localhost:${PORT}`, "content-type": "application/json", "content-length": Buffer.byteLength(body) } },
+      (res) => {
+        let b = "";
+        res.on("data", (c) => (b += c));
+        res.on("end", () => resolve({ status: res.statusCode ?? 0, body: b }));
+      },
+    );
+    r.on("error", reject);
+    r.end(body);
+  });
+  expect(res.status).toBe(401);
+  expect(JSON.parse(res.body)).toMatchObject({ payment: "choose" });
 });

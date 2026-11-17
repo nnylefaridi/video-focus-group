@@ -124,15 +124,19 @@ export async function reviewKey(reviewId: string): Promise<ReviewKey> {
   if (!isHosted()) return { kind: "server", paidWith: null };
   const review = await one<{ user_id: string | null; paid_with: string | null }>("SELECT user_id, paid_with::text AS paid_with FROM app.reviews WHERE id = $1", [reviewId]);
   if (!review?.user_id || review.paid_with !== "own_key") return { kind: "server", paidWith: review?.paid_with === "credits" ? "credits" : null };
-  const userId = review.user_id;
+  return { kind: "own", userId: review.user_id, ...(await accountKey(review.user_id)) };
+}
+
+/** The account's saved key as it is right now, or why it can't be used. */
+export async function accountKey(userId: string): Promise<{ key: SecretKey | null; problem: string | null }> {
   const row = await one<KeyRow>("SELECT * FROM app.api_keys WHERE user_id = $1", [userId]);
-  if (!row) return { kind: "own", userId, key: null, problem: KEY_REMOVED };
-  if (row.rejected_at != null) return { kind: "own", userId, key: null, problem: KEY_REJECTED };
+  if (!row) return { key: null, problem: KEY_REMOVED };
+  if (row.rejected_at != null) return { key: null, problem: KEY_REJECTED };
   try {
     const key = unseal({ version: Number(row.key_version), iv: row.iv, tag: row.auth_tag, ciphertext: row.ciphertext }, userId);
-    return { kind: "own", userId, key: new SecretKey(key), problem: null };
+    return { key: new SecretKey(key), problem: null };
   } catch (e) {
-    console.error(`[keys] couldn't decrypt the saved key for review ${reviewId}:`, e instanceof Error ? e.message : "unknown error");
-    return { kind: "own", userId, key: null, problem: KEY_UNREADABLE };
+    console.error(`[keys] couldn't decrypt the saved key of account ${userId}:`, e instanceof Error ? e.message : "unknown error");
+    return { key: null, problem: KEY_UNREADABLE };
   }
 }

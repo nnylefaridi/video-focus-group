@@ -6,8 +6,9 @@ import { getViewer } from "@/server/auth";
 import { getPaymentContext } from "@/server/billing";
 
 /**
- * Hosted mode asks people to log in after the board, then how they'll pay, before the
- * upload. Never on this first screen. Local mode asks neither.
+ * Hosted mode asks how people will pay on this first screen, in place of the first question
+ * (logging in on the way), because the server checks answers only on their own key or
+ * credits. Local mode starts with the first question.
  */
 async function Start() {
   await connection();

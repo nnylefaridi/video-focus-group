@@ -1,13 +1,15 @@
+import { AsyncLocalStorage } from "node:async_hooks";
 import Anthropic from "@anthropic-ai/sdk";
 import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import type { z } from "zod";
 import { addCost, getReview } from "@/server/reviews";
 import { COST_CAP_USD } from "@/server/config";
 import { assertWithinSpendLimits, LimitReached, recordSpend } from "@/server/budget";
-import { KEY_FORBIDDEN, KEY_REJECTED, KEY_REMOVED, markKeyRejected, reviewKey } from "@/server/apikeys";
+import { accountKey, KEY_FORBIDDEN, KEY_REJECTED, KEY_REMOVED, markKeyRejected, reviewKey } from "@/server/apikeys";
+import { isHosted } from "@/server/config";
 import type { PaymentMethod } from "@/server/billing";
 import sharp from "sharp";
-import { currentReservation, holdForCall, NotEnoughCredits, releaseHold, ReservationUsed, usdToMicros, type Hold } from "@/server/credits";
+import { assertCreditsFor, chargeCall, currentReservation, holdForCall, NotEnoughCredits, releaseHold, ReservationUsed, usdToMicros, type Hold } from "@/server/credits";
 
 export const MODELS = {
   fast: "claude-haiku-5-5",
@@ -35,8 +37,22 @@ function serverAnthropic(): Anthropic {
   return serverClient;
 }
 
-/** The client a call runs on, whose own key that is (null: the server's), and how the call is paid for. */
-type Caller = { client: Anthropic; ownKeyOf: string | null; paidWith: PaymentMethod | null };
+/**
+ * The client a call runs on, whose own key that is (null: the server's), how the call is
+ * paid for, and (credits, no review) whose credits it's charged to afterwards.
+ */
+type Caller = { client: Anthropic; ownKeyOf: string | null; paidWith: PaymentMethod | null; chargeTo?: string | null };
+
+/** Who pays for calls that belong to no review (answer checks), in hosted mode. Set per request by asPayer. */
+export type Payer = { userId: string; method: PaymentMethod };
+const payers = new AsyncLocalStorage<Payer>();
+
+/** Runs fn with its no-review calls paid by this account: on its own key, or charged to its credits. */
+export function asPayer<T>(payer: Payer, fn: () => Promise<T>): Promise<T> {
+  return payers.run(payer, fn);
+}
+
+export const NO_PAYER = "Choose how to pay first: prepaid credits or your own Anthropic API key.";
 
 /**
  * Every paid call gets its client here. Calls for a review started on the owner's own
@@ -45,10 +61,26 @@ type Caller = { client: Anthropic; ownKeyOf: string | null; paidWith: PaymentMet
  * (answer checks, local mode) uses the server's ANTHROPIC_API_KEY as always.
  */
 async function anthropicFor(reviewId: string | null): Promise<Caller> {
+  // Hosted mode: a call that belongs to no review runs only for an account that pays for it.
+  // The server's key is never spent on a visitor who hasn't chosen how to pay.
+  if (!reviewId && isHosted()) return payerFor(payers.getStore());
   const k = reviewId ? await reviewKey(reviewId) : ({ kind: "server", paidWith: null } as const);
   if (k.kind === "server") return { client: serverAnthropic(), ownKeyOf: null, paidWith: k.paidWith };
   if (!k.key) throw new AiUnavailable(k.problem ?? KEY_REMOVED);
-  return { client: new Anthropic({ apiKey: k.key.reveal(), authToken: null }), ownKeyOf: k.userId, paidWith: "own_key" };
+  return { client: ownKeyClient(k.key), ownKeyOf: k.userId, paidWith: "own_key" };
+}
+
+/** The one place a client is made on an account's own key (never the server's, whatever the environment holds). */
+function ownKeyClient(key: { reveal(): string }): Anthropic {
+  return new Anthropic({ apiKey: key.reveal(), authToken: null });
+}
+
+export async function payerFor(payer: Payer | undefined): Promise<Caller> {
+  if (!payer) throw new AiUnavailable(NO_PAYER);
+  if (payer.method === "credits") return { client: serverAnthropic(), ownKeyOf: null, paidWith: "credits", chargeTo: payer.userId };
+  const { key, problem } = await accountKey(payer.userId);
+  if (!key) throw new AiUnavailable(problem ?? KEY_REMOVED);
+  return { client: ownKeyClient(key), ownKeyOf: payer.userId, paidWith: "own_key" };
 }
 
 /** The runner checks a review's key before starting, so a missing one fails before any media work. */
@@ -131,6 +163,17 @@ async function holdCredits(
   minTokens: number,
 ): Promise<Hold | null> {
   if (caller.paidWith !== "credits") return null;
+  if (caller.chargeTo) {
+    // No review, so no reservation: the account must have the call's worst case free.
+    const [i, o] = PRICES[model];
+    try {
+      await assertCreditsFor(caller.chargeTo, (await inputTokenBound(request)) * i * 1.25 + o * maxTokens);
+    } catch (e) {
+      if (e instanceof NotEnoughCredits) throw new BudgetExceeded(e.message);
+      throw e;
+    }
+    return null;
+  }
   const reservation = currentReservation();
   if (!reservation || !reviewId) throw new AiUnavailable("No credit was set aside for this, so it can't run. Please try again.");
   const [i, o] = PRICES[model];
@@ -208,6 +251,7 @@ export async function callStructured<S extends z.ZodType>(opts: CallOpts<S>): Pr
     });
     usd = priceOf(opts.model, msg.usage);
     await recordSpend({ label: opts.label, model: opts.model, usd, reviewId: opts.reviewId, paidWith });
+    if (caller.chargeTo) await chargeCall(caller.chargeTo, usdToMicros(usd), opts.label);
     if (opts.reviewId) {
       await addCost(opts.reviewId, { label: opts.label, model: opts.model, usd, inTok: msg.usage.input_tokens, outTok: msg.usage.output_tokens });
     }
@@ -223,6 +267,8 @@ export async function callStructured<S extends z.ZodType>(opts: CallOpts<S>): Pr
 /** Streaming plain-text call used for follow-up chat. Yields text deltas. */
 export async function* streamText(opts: Omit<CallOpts<z.ZodType>, "schema"> & { tools?: Anthropic.Beta.BetaToolUnion[] }) {
   const caller = await anthropicFor(opts.reviewId);
+  // Streams are follow-up answers, which always belong to a review and its reservation.
+  if (caller.chargeTo) throw new AiUnavailable("This can only run as part of a review.");
   await checkBudget(opts.reviewId, caller);
   const { client, ownKeyOf, paidWith } = caller;
   const wanted = opts.maxTokens ?? 8000;

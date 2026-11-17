@@ -12,6 +12,7 @@ import { BoardStep } from "./BoardStep";
 import { UploadStep } from "./UploadStep";
 import { SignInStep } from "./SignInStep";
 import { PaymentStep } from "./PaymentStep";
+import { SETUP_KEY, StartPay } from "./StartPay";
 import type { PaymentContext } from "@/server/billing";
 import { Puppet } from "../puppets/Puppet";
 import { useFirstScreen } from "../CoffeeLink";
@@ -31,6 +32,12 @@ export function isFirstScreen(step: Step, answers: Answer[], editing: string | n
 export function needsPaymentChoice(pay: PaymentContext | null, changing: boolean, pickedThisVisit: boolean): boolean {
   if (!pay) return false;
   return !pay.method || changing || (!pay.ready && !pickedThisVisit);
+}
+
+/** Hosted mode: whether the first screen asks how to pay instead of the first question. */
+export function startsWithPayment(signedOut: boolean, pay: PaymentContext | null, firstScreen: boolean): boolean {
+  if (signedOut) return true;
+  return firstScreen && pay !== null && !(pay.method && pay.ready);
 }
 
 type Saved = { answers: Answer[]; step: Step; board: string[] | null; editing: string | null };
@@ -58,9 +65,9 @@ function load(): Saved | null {
 
 /**
  * Client-only (see FlowLoader): restores an in-progress flow from this tab's session.
- * `signInFirst` (hosted mode, signed out) puts a log-in step where the upload would be.
- * `payment` (hosted mode, signed in) is how the account pays; with no choice yet, the
- * payment step comes before the upload. Local mode passes neither.
+ * Hosted mode: `signInFirst` (signed out) or a `payment` that can't pay yet (signed in)
+ * puts the payment choice (StartPay) where the first question would be. Local mode passes
+ * neither and starts with the first question.
  */
 export function Flow({
   signInFirst = false,
@@ -131,7 +138,22 @@ export function Flow({
     return () => ctrl.abort();
   }, [fields]);
 
-  useFirstScreen(isFirstScreen(step, answers, editing));
+  const firstScreen = isFirstScreen(step, answers, editing);
+  /**
+   * Hosted mode: the first screen asks how to pay instead of the first question, until the
+   * choice can pay (the server checks answers only on the visitor's own key or credits).
+   * Signed out, it's asked wherever they are.
+   */
+  const startPay = startsWithPayment(signInFirst, pay, firstScreen);
+  useFirstScreen(firstScreen || startPay);
+
+  // A choice that can pay has nothing left to set up.
+  useEffect(() => {
+    if (!pay?.ready) return;
+    try {
+      sessionStorage.removeItem(SETUP_KEY);
+    } catch {}
+  }, [pay?.ready]);
 
   const current: QuestionNode | null = editing ? (QUESTION_BY_ID.get(editing) ?? null) : nextQuestion(answers);
 
@@ -166,19 +188,24 @@ export function Flow({
 
   const effectiveBoard = boardIds ?? picks.map((p) => p.id);
   const askPay = needsPaymentChoice(pay, choosingPay, pickedPay);
-  const firstScreen = isFirstScreen(step, answers, editing);
   const boardCards = effectiveBoard.map((id) => roster.find((c) => c.id === id)).filter((c): c is ExpertCard => Boolean(c));
 
   return (
     <main className="relative mx-auto flex min-h-dvh w-full max-w-3xl flex-col px-4 sm:px-8">
       {/* Hosted mode, signed out: a way back into an existing account, on the first screen only. */}
-      {signInFirst && firstScreen && (
+      {signInFirst && startPay && (
         <Link href="/login?next=/" className="absolute top-4 right-4 rounded-full px-3 py-1.5 text-sm font-semibold text-ink-soft transition-colors hover:text-ink sm:right-8">
           Log in
         </Link>
       )}
       <AnimatePresence mode="wait">
-        {step === "questions" && current && (
+        {startPay && (
+          <motion.div key="start-pay" initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="flex flex-1 flex-col justify-center py-10">
+            <StartPay pay={pay} onPayment={setPay} />
+          </motion.div>
+        )}
+
+        {!startPay && step === "questions" && current && (
           <motion.div
             key={current.id + (editing ? ":edit" : "")}
             initial={{ opacity: 0, y: 14 }}
@@ -198,7 +225,7 @@ export function Flow({
           </motion.div>
         )}
 
-        {step === "board" && (
+        {!startPay && step === "board" && (
           <motion.div key="board" initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="py-12 sm:py-16">
             <BoardStep
               answers={answers}

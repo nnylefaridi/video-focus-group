@@ -171,6 +171,31 @@ export async function reserveCredits(t: Query, userId: string, reviewId: string,
   return id;
 }
 
+export const ANSWER_CHECK_SHORT = "Your credit balance is too low to check this answer. Top up to continue.";
+
+/**
+ * Calls that belong to no review (answer checks) paid with credits: they're small, so
+ * instead of a reservation the account must have their worst case free before the call
+ * (this), and is charged what the call cost x MARGIN after it (chargeCall).
+ */
+export async function assertCreditsFor(userId: string, worstCaseMicros: number, query: Query = q): Promise<void> {
+  const s = await creditSummary(userId, query);
+  if (s.onHold) throw new NotEnoughCredits(ON_HOLD);
+  if (s.available < withMargin(worstCaseMicros)) throw new NotEnoughCredits(ANSWER_CHECK_SHORT);
+}
+
+/** Charges a call that belongs to no review: its cost x MARGIN, never more than the account has free. Returns what was charged. */
+export async function chargeCall(userId: string, costMicros: number, note: string): Promise<number> {
+  return tx(async (t) => {
+    const acct = await lockAccount(t, userId);
+    const owed = withMargin(costMicros);
+    const charge = Math.min(owed, Math.max(0, acct.balance - acct.reserved));
+    if (owed > charge) console.error(`[credits] ${note} for ${userId} cost ${formatMicros(owed)} with margin, more than the ${formatMicros(charge)} free`);
+    if (charge > 0) await post(t, userId, acct, { balance: -charge }, { kind: "charge", amount: -charge, note, uncollected: owed - charge });
+    return charge;
+  });
+}
+
 /** reserveCredits in a transaction of its own. */
 export async function reserve(userId: string, reviewId: string, purpose: Purpose): Promise<number> {
   return tx((t) => reserveCredits(t, userId, reviewId, purpose));
