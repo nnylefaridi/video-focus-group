@@ -28,7 +28,7 @@
     "embedded-postgres": "18.4.0-beta.17",
     "motion": "^14.3.0",
     "nanoid": "^6.0.2",
-    "next": "16.4.2",
+    "next": "16.4.6",
     "postgres": "^3.4.9",
     "react": "19.3.0",
     "react-dom": "19.3.0",
@@ -48,7 +48,7 @@
     "@types/react-dom": "^19",
     "better-sqlite3": "^13.0.3",
     "eslint": "^9",
-    "eslint-config-next": "16.4.2",
+    "eslint-config-next": "16.4.6",
     "tailwindcss": "^4",
     "typescript": "^5",
     "vitest": "^5.0.5"
