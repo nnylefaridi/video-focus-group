@@ -191,10 +191,10 @@ export function Flow({
   const boardCards = effectiveBoard.map((id) => roster.find((c) => c.id === id)).filter((c): c is ExpertCard => Boolean(c));
 
   return (
-    <main className="relative mx-auto flex min-h-dvh w-full max-w-3xl flex-col px-4 sm:px-8">
+    <main className={`relative mx-auto flex min-h-dvh w-full flex-col px-4 sm:px-8 ${startPay ? "max-w-5xl" : "max-w-3xl"}`}>
       {/* Hosted mode, signed out: a way back into an existing account, on the first screen only. */}
       {signInFirst && startPay && (
-        <Link href="/login?next=/" className="absolute top-4 right-4 rounded-full px-3 py-1.5 text-sm font-semibold text-ink-soft transition-colors hover:text-ink sm:right-8">
+        <Link href="/login?next=/" className="absolute top-4 right-4 z-10 rounded-full bg-accent px-5 py-2 text-sm font-bold text-accent-ink shadow-lift transition-all hover:brightness-110 sm:right-8">
           Log in
         </Link>
       )}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { PaymentContext, PaymentMethod } from "@/server/billing";
 import { ApiKeyPanel } from "../account/ApiKeyPanel";
@@ -9,7 +9,7 @@ import { ArrowLeft, Spinner } from "../Icons";
 import { LoginHint } from "./LoginHint";
 
 export const START_CHOICES: { method: PaymentMethod; label: string; cost: string }[] = [
-  { method: "credits", label: "Pay with credits", cost: "Top up from $10 by card. Each use costs what it costs us plus 20%." },
+  { method: "credits", label: "Pay as you go", cost: "Top up from $10 by card. Each use costs what it costs us plus 20%." },
   { method: "own_key", label: "Use your own Anthropic key", cost: "Anthropic bills your key. Video Focus Group charges nothing." },
 ];
 
@@ -48,6 +48,16 @@ export function StartPay({ pay, onPayment }: { pay: PaymentContext | null; onPay
   const [busy, setBusy] = useState<PaymentMethod | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loginHelps, setLoginHelps] = useState(false);
+  const video = useRef<HTMLVideoElement>(null);
+  const [muted, setMuted] = useState(true);
+  // It starts muted (browsers only autoplay silent video); the button turns the sound on.
+  const toggleSound = () => {
+    const v = video.current;
+    if (!v) return;
+    v.muted = !v.muted;
+    if (!v.muted && v.paused) void v.play().catch(() => {});
+    setMuted(v.muted);
+  };
 
   const setSetup = (m: PaymentMethod | null) => {
     setSetupState(m);
@@ -107,20 +117,32 @@ export function StartPay({ pay, onPayment }: { pay: PaymentContext | null; onPay
   }
 
   return (
-    <div className="mx-auto w-full max-w-xl">
-      <h1 className="font-display text-[2rem] leading-[1.15] font-extrabold tracking-[-0.015em] text-ink sm:text-[2.6rem]">How do you want to pay?</h1>
-      <video
-        className="mx-auto mt-6 block aspect-video w-full max-w-[calc(30dvh*16/9)] rounded-[1.4rem] object-cover shadow-lift"
-        src="/demo.mp4"
-        poster="/demo-poster.jpg"
-        autoPlay
-        muted
-        loop
-        playsInline
-        preload="auto"
-        aria-label="Video Focus Group demo"
-      />
-      <div className="mt-6 grid gap-3 sm:grid-cols-2" role="group" aria-label="How do you want to pay?">
+    <div className="mx-auto w-full max-w-5xl">
+      <h1 className="font-display text-[2rem] leading-[1.15] font-extrabold tracking-[-0.015em] text-ink sm:text-[2.6rem]">Make your videos WORK</h1>
+      {/* As big as fits: the rest of the screen takes about 19rem, so the video gets the height left. */}
+      <div className="relative mx-auto mt-5 w-full max-w-[calc((100dvh-19rem)*16/9)]">
+        <video
+          ref={video}
+          className="block aspect-video w-full rounded-[1.4rem] bg-ink object-cover shadow-lift"
+          src="/demo.mp4"
+          poster="/demo-poster.jpg"
+          autoPlay
+          muted
+          loop
+          playsInline
+          preload="auto"
+          aria-label="Video Focus Group launch video"
+        />
+        <button
+          type="button"
+          onClick={toggleSound}
+          aria-pressed={!muted}
+          className="absolute right-3 bottom-3 rounded-full bg-accent px-3.5 py-1.5 text-sm font-bold text-accent-ink transition-all hover:brightness-110"
+        >
+          {muted ? "Sound on" : "Sound off"}
+        </button>
+      </div>
+      <div className="mt-5 grid gap-3 sm:grid-cols-2" role="group" aria-label="How do you want to pay?">
         {START_CHOICES.map((c) => (
           <button
             key={c.method}
@@ -136,7 +158,6 @@ export function StartPay({ pay, onPayment }: { pay: PaymentContext | null; onPay
           </button>
         ))}
       </div>
-      {!signedIn && <p className="mt-4 text-sm text-ink-soft">Either way, you log in or sign up next.</p>}
       {error && (
         <p role="alert" className="mt-4 rounded-xl bg-warn-soft px-4 py-3 text-sm text-warn">
           {error}
