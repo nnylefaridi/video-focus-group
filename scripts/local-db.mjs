@@ -21,6 +21,26 @@ export function wantsLocalDatabase() {
 
 export class LocalDatabaseError extends Error {}
 
+function databaseHint(why) {
+  const text = String(why).toLowerCase();
+  if (/address already in use|eaddrinuse/.test(text)) {
+    return "Port 54329 is already taken. Stop the other program using it, then try again.";
+  }
+  if (/postmaster\.pid|lock file|another postgres|being used by another process/.test(text)) {
+    return "The built-in database looks like it was left running. Stop Panel with Ctrl + C. If it still fails, delete the data/pg folder (that deletes reviews stored in the built-in database) and run npm run setup again.";
+  }
+  if (/locale|lc_all|lc_ctype|invalid locale/.test(text)) {
+    return "Postgres couldn't start because of a locale. On Ubuntu, `locale -a` should list en_US.utf8 or C.utf8 (those are the names the built-in database looks for). Then run npm run setup again.";
+  }
+  if (/permission denied|eacces/.test(text)) {
+    return "Panel couldn't write the database files under data/pg. Fix that folder's permissions and run npm run setup again.";
+  }
+  if (/no space left|enospc/.test(text)) {
+    return "The disk is full. Free some space and run npm run setup again.";
+  }
+  return "Run npm run setup, then npm run dev again. Database files are in data/pg and the server only listens on 127.0.0.1:54329. Deleting data/pg removes reviews stored in the built-in database.";
+}
+
 /** True when the local database is already running (Panel is open in another window). */
 export const localDatabaseRunning = () =>
   new Promise((resolve) => {
@@ -48,12 +68,19 @@ export async function startLocalDatabase({ quiet = true } = {}) {
       if (/error|fatal|panic/i.test(msg) && !/database system is ready/i.test(msg)) console.error(`[database] ${msg.trim()}`);
     },
   });
-  if (!fs.existsSync(path.join(dir, "PG_VERSION"))) await pg.initialise();
+  if (!fs.existsSync(path.join(dir, "PG_VERSION"))) {
+    try {
+      await pg.initialise();
+    } catch (e) {
+      const why = e instanceof Error ? e.message : typeof e === "string" ? e : "";
+      throw new LocalDatabaseError(`The local database couldn't be created${why ? ` (${why})` : ""}. ${databaseHint(why)}`);
+    }
+  }
   try {
     await pg.start();
   } catch (e) {
     const why = e instanceof Error ? e.message : typeof e === "string" ? e : "";
-    throw new LocalDatabaseError(`The local database couldn't start${why ? ` (${why})` : ""}. Try npm run setup, then npm run dev again.`);
+    throw new LocalDatabaseError(`The local database couldn't start${why ? ` (${why})` : ""}. ${databaseHint(why)}`);
   }
   const client = pg.getPgClient();
   await client.connect();
