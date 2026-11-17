@@ -36,5 +36,6 @@ export const config = {
   // uploads: Next.js buffers any request body that passes through the proxy (10 MB max),
   // which would cut uploads short. The upload route checks who's uploading itself.
   // Stripe's webhook has no session and is checked by its signature over the untouched body.
-  matcher: ["/((?!_next/static|_next/image|api/media|api/reviews/.*/video|api/stripe/webhook|favicon.ico|.*\\.(?:png|jpg|jpeg|svg|webp)$).*)"],
+  // The host's health check (api/health) needs no session either.
+  matcher: ["/((?!_next/static|_next/image|api/media|api/reviews/.*/video|api/stripe/webhook|api/health|favicon.ico|.*\\.(?:png|jpg|jpeg|svg|webp)$).*)"],
 };

@@ -1,7 +1,7 @@
 import path from "node:path";
 import fs from "node:fs";
 import crypto from "node:crypto";
-import { parseMode, publicOriginOf, type Mode } from "./mode.mjs";
+import { mediaSecretOf, parseMode, publicOriginOf, type Mode } from "./mode.mjs";
 
 export type { Mode };
 
@@ -66,13 +66,24 @@ export const SPEND_LIMITS = {
 
 fs.mkdirSync(MEDIA_DIR, { recursive: true });
 
-/** Secret for signing media URLs. Generated once per install, kept in the data dir. */
+/**
+ * Secret for signing media URLs and keying the per-network limits. Hosted mode: MEDIA_SECRET, the
+ * same on every machine and across restarts. Local mode: generated once per install, kept in the data dir.
+ */
+let secret: Buffer | undefined;
+export function mediaSecret(): Buffer {
+  return (secret ??= loadSecret());
+}
 function loadSecret(): Buffer {
+  if (isHosted()) {
+    const fromEnv = mediaSecretOf(process.env.MEDIA_SECRET);
+    if (!fromEnv) throw new Error("MEDIA_SECRET isn't set to at least 32 random bytes (base64 or hex). Make one with `openssl rand -base64 32`, set it, and restart.");
+    return fromEnv;
+  }
   const file = path.join(DATA_DIR, ".media-secret");
   if (!fs.existsSync(file)) fs.writeFileSync(file, crypto.randomBytes(32).toString("hex"), { mode: 0o600 });
   return Buffer.from(fs.readFileSync(file, "utf8").trim(), "hex");
 }
-export const MEDIA_SECRET = loadSecret();
 
 export function hasAnthropicKey(): boolean {
   return Boolean(process.env.ANTHROPIC_API_KEY);

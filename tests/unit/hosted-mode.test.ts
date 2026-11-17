@@ -14,6 +14,7 @@ import {
   encryptionSecretOf,
   hostedProblems,
   listenAddress,
+  mediaSecretOf,
   parseEnvFile,
   parseMode,
   peerAddress,
@@ -36,6 +37,7 @@ const HOSTED = {
   HOSTED_PUBLIC_URL: "https://panel.example.com",
   CLIENT_IP_HEADER: "Fly-Client-IP",
   KEY_ENCRYPTION_SECRET: Buffer.alloc(32, 7).toString("base64"),
+  MEDIA_SECRET: Buffer.alloc(32, 9).toString("base64"),
   STRIPE_SECRET_KEY: "sk_test_51abcdefghijklmnop",
   STRIPE_WEBHOOK_SECRET: "whsec_abcdefghijklmnop",
 };
@@ -103,10 +105,50 @@ describe("what hosted mode needs before it starts", () => {
       "DATABASE_URL",
       "HOSTED_PUBLIC_URL",
       "KEY_ENCRYPTION_SECRET",
+      "MEDIA_SECRET",
       "STRIPE_SECRET_KEY",
       "STRIPE_WEBHOOK_SECRET",
       "CLIENT_IP_HEADER (or TRUSTED_PROXIES)",
     ]);
+  });
+
+  it("needs MEDIA_SECRET to be at least 32 bytes as base64 or hex", () => {
+    expect(hostedProblems(without("MEDIA_SECRET")).missing).toEqual(["MEDIA_SECRET"]);
+    expect(() => checkStartup(without("MEDIA_SECRET"))).toThrow(/These settings are missing:\n {2}- MEDIA_SECRET/);
+    expect(mediaSecretOf(HOSTED.MEDIA_SECRET)).toHaveLength(32);
+    expect(mediaSecretOf("ab".repeat(48))).toHaveLength(48);
+    for (const bad of ["secret", "ab".repeat(16), Buffer.alloc(16).toString("base64"), "not base64!!"]) {
+      expect(mediaSecretOf(bad)).toBeNull();
+      const { missing, invalid } = hostedProblems({ ...HOSTED, MEDIA_SECRET: bad });
+      expect(missing).toEqual([]);
+      expect(invalid).toEqual(["MEDIA_SECRET must be at least 32 random bytes, written as base64 or hex. Make one with: openssl rand -base64 32"]);
+    }
+  });
+
+  it("signs media links with MEDIA_SECRET in hosted mode, and the data-dir file in local mode", () => {
+    const script = `
+      const c = await import("./src/server/config.ts");
+      const fs = await import("node:fs");
+      const file = c.DATA_DIR + "/.media-secret";
+      const secret = c.mediaSecret().toString("hex");
+      console.log(JSON.stringify({ secret, file: fs.existsSync(file) }));`;
+    const run = (env: Record<string, string>) => {
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), "panel-media-"));
+      const r = spawnSync(process.execPath, ["--import", "tsx", "--input-type=module", "-e", script], {
+        cwd: ROOT,
+        encoding: "utf8",
+        env: { PATH: process.env.PATH ?? "", DATA_DIR: dir, ...env } as unknown as NodeJS.ProcessEnv,
+      });
+      return { ...r, out: r.status === 0 ? JSON.parse(r.stdout.trim().split("\n").pop()!) : null };
+    };
+    const hosted = run({ PANEL_MODE: "hosted", MEDIA_SECRET: HOSTED.MEDIA_SECRET });
+    expect(hosted.out).toEqual({ secret: Buffer.alloc(32, 9).toString("hex"), file: false });
+    const missing = run({ PANEL_MODE: "hosted" });
+    expect(missing.status).not.toBe(0);
+    expect(missing.stderr).toMatch(/MEDIA_SECRET isn't set to at least 32 random bytes.*openssl rand -base64 32/);
+    const local = run({});
+    expect(local.out.file).toBe(true);
+    expect(local.out.secret).toHaveLength(64);
   });
 
   it("needs Stripe's secret key and webhook signing secret, and says which is wrong", () => {
@@ -234,7 +276,7 @@ describe("starting Panel", () => {
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "panel-start-"));
     return { cwd, ...spawnSync(process.execPath, args, { cwd, env: { PATH: process.env.PATH ?? "", NODE_ENV: "production", ...env }, encoding: "utf8", timeout: 60_000 }) };
   };
-  const missingAll = /These settings are missing:\n {2}- NEXT_PUBLIC_SUPABASE_URL\n {2}- NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY\n {2}- SUPABASE_SECRET_KEY\n {2}- DATABASE_URL\n {2}- HOSTED_PUBLIC_URL\n {2}- KEY_ENCRYPTION_SECRET\n {2}- STRIPE_SECRET_KEY\n {2}- STRIPE_WEBHOOK_SECRET\n {2}- CLIENT_IP_HEADER \(or TRUSTED_PROXIES\)/;
+  const missingAll = /These settings are missing:\n {2}- NEXT_PUBLIC_SUPABASE_URL\n {2}- NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY\n {2}- SUPABASE_SECRET_KEY\n {2}- DATABASE_URL\n {2}- HOSTED_PUBLIC_URL\n {2}- KEY_ENCRYPTION_SECRET\n {2}- MEDIA_SECRET\n {2}- STRIPE_SECRET_KEY\n {2}- STRIPE_WEBHOOK_SECRET\n {2}- CLIENT_IP_HEADER \(or TRUSTED_PROXIES\)/;
 
   it("stops the website, naming what's missing", () => {
     const r = run([path.join(ROOT, "server.mjs")], { PANEL_MODE: "hosted" });

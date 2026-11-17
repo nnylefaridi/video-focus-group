@@ -76,6 +76,18 @@ export function encryptionSecretOf(value) {
   return bytes.length === 32 && bytes.toString("base64") === v ? bytes : null;
 }
 
+/**
+ * MEDIA_SECRET as the bytes it encodes: at least 32, written as base64 (`openssl rand -base64 32`)
+ * or hex (64+ characters). Null if it isn't that.
+ */
+export function mediaSecretOf(value) {
+  const v = String(value ?? "").trim();
+  if (/^(?:[0-9a-fA-F]{2}){32,}$/.test(v)) return Buffer.from(v, "hex");
+  if (!/^[A-Za-z0-9+/]+={0,2}$/.test(v) || v.length % 4 !== 0) return null;
+  const bytes = Buffer.from(v, "base64");
+  return bytes.length >= 32 && bytes.toString("base64") === v ? bytes : null;
+}
+
 const HOSTED_REQUIRED = [
   "NEXT_PUBLIC_SUPABASE_URL",
   "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
@@ -83,6 +95,7 @@ const HOSTED_REQUIRED = [
   "DATABASE_URL",
   "HOSTED_PUBLIC_URL",
   "KEY_ENCRYPTION_SECRET",
+  "MEDIA_SECRET",
   "STRIPE_SECRET_KEY",
   "STRIPE_WEBHOOK_SECRET",
 ];
@@ -101,6 +114,8 @@ export function hostedProblems(env) {
     invalid.push(`HOSTED_PUBLIC_URL must be the site's public https address with nothing after it, like https://panel.example.com (it's "${String(env.HOSTED_PUBLIC_URL).trim()}")`);
   if (set(env.KEY_ENCRYPTION_SECRET) && !encryptionSecretOf(env.KEY_ENCRYPTION_SECRET))
     invalid.push("KEY_ENCRYPTION_SECRET must be 32 random bytes, written as base64 or hex. Make one with: openssl rand -base64 32");
+  if (set(env.MEDIA_SECRET) && !mediaSecretOf(env.MEDIA_SECRET))
+    invalid.push("MEDIA_SECRET must be at least 32 random bytes, written as base64 or hex. Make one with: openssl rand -base64 32");
   // A publishable key (pk_) can't create payments; the secret or restricted key can.
   if (set(env.STRIPE_SECRET_KEY) && !/^(sk|rk)_(live|test)_\S+$/.test(String(env.STRIPE_SECRET_KEY).trim()))
     invalid.push("STRIPE_SECRET_KEY must be the secret key from the Stripe Dashboard (Developers → API keys), starting sk_live_ or sk_test_ (or a restricted key, rk_)");

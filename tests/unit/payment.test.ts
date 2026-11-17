@@ -13,6 +13,7 @@ import type { PaymentContext } from "@/server/billing";
 
 process.env.DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "panel-payment-"));
 process.env.PANEL_MODE = "hosted";
+process.env.MEDIA_SECRET = Buffer.alloc(32, 9).toString("base64");
 process.env.NEXT_PUBLIC_SUPABASE_URL = "https://example.supabase.co";
 process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY = "sb_publishable_test";
 process.env.HOSTED_PUBLIC_URL = "https://panel.example.com";

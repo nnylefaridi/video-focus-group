@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import { MEDIA_SECRET } from "./config";
+import { mediaSecret } from "./config";
 
 /**
  * Who is calling, for per-person limits: the visitor's IP address, so every tab,
@@ -38,7 +38,7 @@ export function normalizeIp(ip: string): string {
 }
 
 export function clientKey(headers: Headers): string {
-  return crypto.createHmac("sha256", MEDIA_SECRET).update(`ip:${clientIp(headers)}`).digest("base64url").slice(0, 32);
+  return crypto.createHmac("sha256", mediaSecret()).update(`ip:${clientIp(headers)}`).digest("base64url").slice(0, 32);
 }
 
 /**
