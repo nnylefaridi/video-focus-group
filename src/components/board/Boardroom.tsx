@@ -92,12 +92,15 @@ export function Boardroom({
   onPick,
   children,
   fitHeight = false,
+  sticks = true,
 }: {
   board: ExpertCard[];
   states: Record<string, PuppetState>;
   onPick?: (id: string) => void;
   /** Size the theatre to the height it is given (the no-scroll board screen) instead of the width. */
   fitHeight?: boolean;
+  /** Draw the popsicle sticks. Off while picking the board, where only the drawings show. */
+  sticks?: boolean;
   /** The flat video player (and anything under it), overlapping the front of the table. */
   children?: ReactNode;
 }) {
@@ -164,7 +167,7 @@ export function Boardroom({
                   transition: "transform 0.5s cubic-bezier(0.34, 1.5, 0.64, 1)",
                 }}
               >
-                <Puppet id={c.id} name={c.name} state={states[c.id] ?? "idle"} delay={i * 0.7} stick={0.55} />
+                <Puppet id={c.id} name={c.name} state={states[c.id] ?? "idle"} delay={i * 0.7} stick={sticks ? 0.55 : 0} />
               </button>
             </div>
           );
