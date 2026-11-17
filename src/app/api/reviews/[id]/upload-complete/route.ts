@@ -1,45 +1,37 @@
-import { z } from "zod";
-import { LIMITS, MAX_UPLOAD_MB } from "@/server/config";
+import { LIMITS } from "@/server/config";
 import { enqueue } from "@/server/jobs";
 import { kickAfterResponse } from "@/server/kick";
 import { ownedUploadReview } from "@/server/intake";
 import { deleteReview, updateReview } from "@/server/reviews";
-import { uploadedSize } from "@/server/storage";
-
-const Body = z.object({ name: z.string().max(200).optional() });
+import { MANIFEST_MAX_BYTES, parseManifest } from "@/media/analysis/manifest";
 
 /**
- * Hosted mode: the browser says the video is in storage. We confirm it really is there and
- * within the size limit, then queue it. The runner checks what's inside (type, length,
- * shape) before any reviewing starts.
+ * The browser has sent every file it prepared and now describes them (the manifest). Its shape,
+ * counts and timestamps are checked here, cheaply and before anything else; the files themselves
+ * are checked by the runner's first step, before any paid call. A manifest that fails ends the
+ * review and gives back today's review, so a bad request costs nothing.
  */
 export async function POST(req: Request, ctx: RouteContext<"/api/reviews/[id]/upload-complete">) {
   const { id } = await ctx.params;
   const owned = await ownedUploadReview(id);
   if ("response" in owned) return owned.response;
-  const body = Body.safeParse(await req.json().catch(() => ({})));
 
-  let size: number | null;
-  try {
-    size = await uploadedSize(owned.userId, id);
-  } catch (e) {
-    console.error("[upload-complete]", e);
-    return Response.json({ error: "Couldn't confirm your upload. Please try again." }, { status: 502 });
+  const text = await req.text().catch(() => "");
+  let raw: unknown = null;
+  if (text.length <= MANIFEST_MAX_BYTES) {
+    try {
+      raw = JSON.parse(text);
+    } catch {}
   }
-  // The upload didn't land: the review keeps waiting, so they can try again.
-  if (size === null) return Response.json({ error: "Your video didn't arrive. Please try uploading it again." }, { status: 400 });
-
-  // A rejected upload never became a review, so it doesn't count toward today's limit.
-  // Deleting the review removes the raw upload from storage too.
-  if (size === 0 || size > LIMITS.maxBytes) {
+  const parsed = parseManifest(raw, { maxVideoBytes: LIMITS.maxBytes });
+  if (!parsed.ok) {
+    console.error(`[upload-complete] ${id} manifest refused: ${raw === null ? "unreadable or too big" : parsed.reason}`);
     await deleteReview(id, { refund: true });
-    return size === 0
-      ? Response.json({ error: "That file is empty." }, { status: 400 })
-      : Response.json({ error: `That file is larger than ${MAX_UPLOAD_MB} MB.` }, { status: 413 });
+    return Response.json({ error: "Something went wrong preparing your video. Please try again." }, { status: 400 });
   }
 
-  await updateReview(id, { stage: "queued" });
-  await enqueue(id, "process", { name: body.success ? body.data.name : undefined });
+  await updateReview(id, { stage: "queued", draft: { manifest: parsed.manifest } });
+  await enqueue(id, "process");
   kickAfterResponse();
   return Response.json({ ok: true });
 }

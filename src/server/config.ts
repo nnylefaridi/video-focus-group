@@ -28,15 +28,20 @@ export function hostedOrigin(): string {
 export const DATA_DIR = path.resolve(/* turbopackIgnore: true */ process.env.DATA_DIR ?? path.join(/* turbopackIgnore: true */ process.cwd(), "data"));
 export const MEDIA_DIR = path.join(DATA_DIR, "media");
 export const DB_PATH = path.join(DATA_DIR, "app.db");
-export const WHISPER_MODEL = path.resolve(/* turbopackIgnore: true */ process.env.WHISPER_MODEL ?? path.join(/* turbopackIgnore: true */ DATA_DIR, "models", "ggml-base.en.bin"));
 
 const num = (v: string | undefined, fallback: number) => {
   const n = Number(v);
   return Number.isFinite(n) && n > 0 ? n : fallback;
 };
 
-/** The biggest upload in megabytes (MAX_UPLOAD_MB, default 250). The only upload setting the browser is told. */
-export const MAX_UPLOAD_MB = Math.floor(num(process.env.MAX_UPLOAD_MB, 250));
+/**
+ * The default for MAX_UPLOAD_MB: 50 MB on a hosted site (the browser sends a 720p copy, which
+ * fits easily, and storage and bandwidth stay small), 250 MB on your own computer. The mode is
+ * read straight from PANEL_MODE here so that this file needs nothing else at import time.
+ */
+export const DEFAULT_UPLOAD_MB = process.env.PANEL_MODE?.trim() === "hosted" ? 50 : 250;
+/** The biggest prepared video in megabytes (MAX_UPLOAD_MB). The only upload setting the browser is told. */
+export const MAX_UPLOAD_MB = Math.floor(num(process.env.MAX_UPLOAD_MB, DEFAULT_UPLOAD_MB));
 
 export const LIMITS = {
   maxBytes: MAX_UPLOAD_MB * 1024 * 1024,

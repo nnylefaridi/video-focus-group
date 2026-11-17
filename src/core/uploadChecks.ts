@@ -5,6 +5,11 @@
  */
 
 export const MAX_DURATION_SEC = 180;
+/**
+ * The biggest file that can be picked. Only a friendliness check: the original never leaves the
+ * device (a smaller 720p copy is made and sent), so nothing over the network depends on it.
+ */
+export const MAX_PICK_MB = 2048;
 
 const EXTENSIONS = [".mp4", ".mov", ".m4v", ".webm"];
 const MIME_TYPES = ["video/mp4", "video/quicktime", "video/x-m4v", "video/webm"];
@@ -26,7 +31,7 @@ export function checkFile(file: FileFacts, maxMb: number): string | null {
   // Some browsers don't know a video's type and leave it blank; the extension still has to match.
   const typeOk = file.type === "" || MIME_TYPES.includes(file.type.toLowerCase());
   if (!EXTENSIONS.includes(extensionOf(file.name)) || !typeOk) return "That doesn't look like an MP4, MOV or WebM video. Please choose one of those.";
-  if (file.size > maxMb * 1024 * 1024) return `That file is larger than ${maxMb} MB. Please export a smaller version.`;
+  if (file.size > maxMb * 1024 * 1024) return `That file is larger than ${maxMb >= 1024 ? `${maxMb / 1024} GB` : `${maxMb} MB`}. Please export a smaller version.`;
   return null;
 }
 

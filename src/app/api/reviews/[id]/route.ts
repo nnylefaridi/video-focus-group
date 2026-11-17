@@ -5,20 +5,23 @@ import { deleteReview, reviewDir, type ReviewRecord } from "@/server/reviews";
 import { signedMediaUrl } from "@/server/media";
 import { storedMediaUrls } from "@/server/storage";
 import { accessibleReview } from "@/server/auth";
+import { isHosted } from "@/server/config";
 import { kickIfUnattended } from "@/server/kick";
 import { getProfile, toCard } from "@/experts/load";
 import { STAGE_LABELS } from "@/core/review";
 import type { ReviewView, PrincipleRef } from "@/core/view";
 
 /**
- * Media URLs: the local working copy when it's there (fast), otherwise the copy in
- * Supabase Storage for reviews kept in an account.
+ * Media URLs: Supabase Storage for hosted reviews; on this computer, the local copy when it's
+ * there, otherwise the copy kept in an account.
  */
 async function mediaResolver(r: ReviewRecord) {
   const dir = reviewDir(r.id);
   const stored = new Set(r.storedFiles);
   const wanted = ["video.mp4", "poster.jpg", "captions.vtt", ...(r.ledger?.frames.map((f) => f.file) ?? [])];
-  const remote = r.userId ? wanted.filter((f) => stored.has(f) && !fs.existsSync(path.join(dir, f))) : [];
+  // Hosted: always storage's own signed URLs, so no media passes through this server (the local
+  // folder there is only the reviewers' working cache). Local: the copy on this computer first.
+  const remote = !r.userId ? [] : isHosted() ? wanted.filter((f) => stored.has(f)) : wanted.filter((f) => stored.has(f) && !fs.existsSync(path.join(dir, f)));
   const signed = remote.length
     ? await storedMediaUrls(r.userId!, r.id, remote).catch((e) => (console.error("[storage]", e), new Map<string, string>()))
     : new Map<string, string>();

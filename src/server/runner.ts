@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import { AiUnavailable, BudgetExceeded, checkReviewKey } from "@/ai/client";
 import { isHosted } from "./config";
 import { NotEnoughCredits, settleStaleFollowups } from "./credits";
-import { intakeUpload } from "./intake";
+import { verifyUpload } from "./intake";
 import { claimNext, finishJob, heartbeat, releaseJobs, retryJob, type Job } from "./jobs";
 import { runReview } from "./process";
 import { cleanupAbandonedUploads, getReview, updateReview } from "./reviews";
@@ -65,9 +65,9 @@ export async function processJob(job: Job): Promise<void> {
   // Hosted mode never runs a paid review for someone who isn't signed in (the website refuses
   // to make one; this also covers reviews left from before the switch to hosted mode).
   if (isHosted() && !(await getReview(job.reviewId))?.userId) throw new Error("Log in to run this review.");
-  // Hosted: the video went straight to storage. Bring it down and check it first; one that
-  // fails the checks ends the review with its reason, and nothing paid runs.
-  if (isHosted() && (await intakeUpload(job.reviewId, typeof job.payload.name === "string" ? job.payload.name : undefined)) === "rejected") return;
+  // The browser prepared the files and sent them; check them first. Files that fail end the
+  // review with its reason, and nothing paid runs.
+  if ((await verifyUpload(job.reviewId)) === "rejected") return;
   // A review on its owner's own key needs that key saved and usable now; each paid call looks it up again.
   await checkReviewKey(job.reviewId);
   await runReview(job.reviewId);

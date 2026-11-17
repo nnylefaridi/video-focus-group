@@ -1,42 +1,24 @@
 import fs from "node:fs";
 import path from "node:path";
-import type { Coverage, Ledger } from "@/core/evidence";
 import type { ReviewerNotes } from "@/core/review";
-import { probe } from "@/media/probe";
-import { audioSignals, denseSample, detectShots, normalize, sampleFrames, transcribe, writeCaptions } from "@/media/pipeline";
+import { deriveEvidence } from "@/media/analysis/manifest";
 import { perceiveFrames, perceptionKey } from "@/ai/perceive";
 import { composeDiscussion, evidenceBlocks, reviewerPass, synthesize } from "@/ai/review";
 import { getProfile } from "@/experts/load";
 import { getReview, reviewDir, updateReview } from "./reviews";
 import { enqueue } from "./jobs";
 import { isHosted } from "./config";
-import { dropRawUpload } from "./intake";
+import { restoreFile } from "./storage";
 import { onReservation, reservationForRun, settleReservation } from "./credits";
 
-function originalFile(dir: string): string {
-  const f = fs.readdirSync(dir).find((x) => x.startsWith("original."));
-  if (!f) throw new Error("The uploaded file is missing.");
-  return path.join(dir, f);
-}
-
-function coverage(p: { durationSec: number; width: number; height: number; hasAudio: boolean }, ledger: Omit<Ledger, "coverage">): Coverage {
-  const notes: string[] = [];
-  if (!p.hasAudio) notes.push("The video has no audio track, so nothing about sound or speech can be judged.");
-  else if (ledger.transcript.length === 0) notes.push("No speech was detected in the audio.");
-  if (ledger.transcript.some((s) => s.lowConfidence)) notes.push("Some transcript segments are low-confidence and may be misheard.");
-  if (ledger.audio.some((a) => a.kind === "sound_without_speech"))
-    notes.push("Music and sound effects are detected only as 'sound without speech'; their identity, mood and mix are not analyzed.");
-  notes.push("Motion, gestures and timing between sampled frames were not seen; claims about them rely on shot boundaries and speech timing only.");
-  notes.push("Frame colors and composition were judged from downscaled stills, not full-resolution video.");
-  return {
-    durationSec: p.durationSec,
-    width: p.width,
-    height: p.height,
-    framesAnalyzed: ledger.frames.length,
-    sampling: `Frames sampled every 0.25s for the first 3 seconds, about every 1–2s after that, plus the first and middle frame of each of the ${ledger.shots.length} detected shots (${ledger.frames.length} frames total).`,
-    transcript: ledger.transcript.length ? "speech" : "no_speech_detected",
-    notes,
-  };
+/**
+ * The frames (and sprite sheets) the reviewers look at live in storage for hosted reviews; the
+ * local working folder is only a cache that a restart or a sleeping host may have emptied.
+ */
+export async function ensureLocalMedia(userId: string | null, id: string, files: string[]) {
+  if (!isHosted() || !userId) return;
+  const dir = reviewDir(id);
+  for (const f of files) if (!fs.existsSync(path.join(/* turbopackIgnore: true */ dir, f))) await restoreFile(userId, id, f);
 }
 
 /**
@@ -70,20 +52,13 @@ export async function processReview(id: string) {
   // 1. Media → ledger (skipped when resuming after a later-stage failure).
   let ledger = r.ledger;
   if (!ledger) {
-    await stage("ingesting");
-    const p = await probe(originalFile(dir));
-    await normalize(dir, originalFile(dir), p);
-
-    await stage("transcribing");
-    const transcript = await transcribe(dir);
-    if (transcript.length) writeCaptions(dir, transcript);
-
-    await stage("sampling");
-    const shots = await detectShots(dir, p.durationSec);
-    let frames = await sampleFrames(dir, p.durationSec, shots);
-    // A closer look at the hook: 8 fps over the first second and a half.
-    frames = [...frames, ...(await denseSample(dir, frames, shots, p.durationSec, 0.75, 0.75))];
-    const signals = await audioSignals(dir, p.durationSec, transcript);
+    // The browser prepared the media and the runner checked it (verifyUpload); everything but
+    // the frame descriptions comes from that, with ids and timings derived here.
+    const manifest = r.draft?.manifest;
+    if (!manifest || !r.video) throw new Error("This review's video details are missing. Please start it again.");
+    const evidence = deriveEvidence(manifest, r.video);
+    const { frames, transcript } = evidence;
+    await ensureLocalMedia(r.userId, id, frames.map((f) => f.file));
 
     await stage("perceiving", `${frames.length} frames`);
     // Each batch is saved as it's paid for, so a restart only repeats the batches that were in flight.
@@ -95,17 +70,12 @@ export async function processReview(id: string) {
       saved: batches,
       onBatch: async (index, described) => {
         batches[String(index)] = described;
-        await updateReview(id, { draft: { perception: { key, batches } } });
+        await updateReview(id, { draft: { manifest, perception: { key, batches } } });
       },
     });
 
-    const partial = { shots, frames, transcript, ...signals, perception };
-    ledger = { ...partial, coverage: coverage(p, partial) };
+    ledger = { ...evidence, perception };
     await updateReview(id, { ledger, draft: null });
-    // Analysis is saved: the upload as sent (often 100+ MB) and the speech audio aren't needed again.
-    for (const f of fs.readdirSync(dir)) if (f.startsWith("original.") || f === "audio.wav") fs.rmSync(path.join(dir, f), { force: true });
-    // Hosted: the raw upload in storage goes too; the converted video is what's kept.
-    await dropRawUpload(r.userId, id);
   }
 
   // 2. Independent reviewer passes. The first warms the shared evidence cache, the rest run in parallel.
@@ -114,6 +84,7 @@ export async function processReview(id: string) {
   const pending = profiles.filter((p) => !notes[p.id]);
   if (pending.length) {
     await stage("reviewing", `${Object.keys(notes).length} of ${profiles.length} done`);
+    await ensureLocalMedia(r.userId, id, ledger.frames.map((f) => f.file));
     const evidence = await evidenceBlocks(dir, ledger, r.intent);
     const runOne = async (p: (typeof profiles)[number]) => {
       const out = await reviewerPass(id, evidence, ledger!, p);
@@ -143,5 +114,6 @@ export async function processReview(id: string) {
   await stage("done");
   // Signed-in owners keep a record: copy the media to storage. Re-read, since the
   // review may have been claimed by a sign-in while it was processing.
-  if ((await getReview(id))?.userId) await enqueue(id, "store");
+  // Hosted reviews are in storage from the start; a local one is copied there only if it's kept in an account.
+  if (!isHosted() && (await getReview(id))?.userId) await enqueue(id, "store");
 }

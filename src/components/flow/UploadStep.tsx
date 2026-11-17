@@ -12,54 +12,42 @@ import { PAYMENT_LABELS } from "./PaymentStep";
 import { ApiKeyPanel } from "../account/ApiKeyPanel";
 import { CreditsPanel } from "../account/CreditsPanel";
 import { formatMicros } from "@/core/credits";
-import { ACCEPT, checkFile, checkVideo } from "@/core/uploadChecks";
-import { readVideoMeta } from "./readVideoMeta";
+import { ACCEPT, checkFile, checkVideo, MAX_PICK_MB } from "@/core/uploadChecks";
 
-const MAX_BYTES = 250 * 1024 * 1024;
-const LOCAL_ACCEPT = "video/mp4,video/quicktime,video/webm,.mp4,.mov,.m4v,.webm";
-
-/** Hosted: sends the video straight to storage at the one-time address, with real progress. */
-function uploadToStorage(url: string, file: File, onProgress: (p: number) => void): Promise<{ ok: boolean; error?: string }> {
+/** Sends one prepared file with real progress: to storage's one-time URL (hosted) or to this computer (local). */
+function put(url: string, blob: Blob, hosted: boolean, onProgress: (sent: number) => void): Promise<{ ok: boolean; error?: string }> {
   return new Promise((resolve) => {
     const xhr = new XMLHttpRequest();
     xhr.open("PUT", url);
-    xhr.setRequestHeader("content-type", file.type || "application/octet-stream");
-    xhr.setRequestHeader("x-upsert", "false");
-    xhr.upload.onprogress = (e) => e.lengthComputable && onProgress(e.loaded / e.total);
+    xhr.setRequestHeader("content-type", blob.type || "application/octet-stream");
+    if (hosted) xhr.setRequestHeader("x-upsert", "true");
+    xhr.upload.onprogress = (e) => onProgress(e.loaded);
     xhr.onload = () =>
       resolve(
         xhr.status >= 200 && xhr.status < 300
           ? { ok: true }
-          : { ok: false, error: xhr.status === 413 ? "That file is too big for storage. Please export a smaller version." : "The upload failed. Please try again." },
+          : { ok: false, error: xhr.status === 413 ? "Your video came out too big to store. Please trim it and try again." : "Sending your video failed. Please try again." },
       );
-    xhr.onerror = () => resolve({ ok: false, error: "The upload was interrupted, so it has to start over. Check your connection and try again." });
-    xhr.send(file);
+    xhr.onerror = () => resolve({ ok: false, error: "Sending was interrupted, so it has to start over. Check your connection and try again." });
+    xhr.send(blob);
   });
 }
 
-function uploadWithProgress(url: string, file: File, onProgress: (p: number) => void): Promise<{ ok: boolean; error?: string }> {
-  return new Promise((resolve) => {
-    const xhr = new XMLHttpRequest();
-    xhr.open("PUT", url);
-    xhr.setRequestHeader("x-file-name", encodeURIComponent(file.name));
-    xhr.upload.onprogress = (e) => e.lengthComputable && onProgress(e.loaded / e.total);
-    xhr.onload = () => {
-      let data: { error?: string } = {};
-      try {
-        data = JSON.parse(xhr.responseText);
-      } catch {}
-      resolve(xhr.status >= 200 && xhr.status < 300 ? { ok: true } : { ok: false, error: data.error ?? "The upload failed." });
-    };
-    xhr.onerror = () => resolve({ ok: false, error: "The upload was interrupted. Please try again." });
-    xhr.send(file);
-  });
-}
+const PHASE_COPY: Record<string, string> = {
+  convert: "Preparing your video on this device…",
+  frames: "Finding cuts and pulling frames…",
+  audio: "Measuring the sound…",
+  transcribe: "Listening for speech… This can take a minute or two on a phone.",
+};
+
+const mb = (bytes: number) => Math.max(1, Math.round(bytes / 1024 / 1024));
 
 export function UploadStep({
   answers,
   board,
   payment = null,
   maxUploadMb,
+  hosted = false,
   onBack,
   onDone,
   onChangePayment,
@@ -67,8 +55,10 @@ export function UploadStep({
 }: {
   answers: Answer[];
   board: ExpertCard[];
-  /** Hosted mode: the size limit in MB. Its presence means the video is checked here first and sent straight to storage. */
-  maxUploadMb?: number;
+  /** The most the prepared video may be, in MB (MAX_UPLOAD_MB on the server). */
+  maxUploadMb: number;
+  /** Hosted mode: prepared files go straight to storage instead of to this computer. */
+  hosted?: boolean;
   /** Hosted mode: how the account pays. Null in local mode, which uses the server's own key. */
   payment?: PaymentContext | null;
   onBack: () => void;
@@ -79,74 +69,119 @@ export function UploadStep({
 }) {
   const router = useRouter();
   const input = useRef<HTMLInputElement>(null);
+  // Preparing takes minutes, and the board can finish loading after the file is picked: send the
+  // latest answers and board when the review starts, not the ones from the moment of picking.
+  const latest = useRef({ answers, board });
+  latest.current = { answers, board };
   const [drag, setDrag] = useState(false);
   const [progress, setProgress] = useState<number | null>(null);
+  const [status, setStatus] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loginHelps, setLoginHelps] = useState(false);
-  /** Reading the chosen video's length and shape, before anything is sent. */
+  /** Reading the chosen video's length and shape, before the long work. */
   const [checking, setChecking] = useState(false);
-  const direct = maxUploadMb !== undefined;
 
   async function start(file: File) {
     setError(null);
     setLoginHelps(false);
-    if (direct) {
-      // Quick checks first, so a problem shows in seconds and not after a long upload.
-      const basics = checkFile(file, maxUploadMb);
-      if (basics) return setError(basics);
-      setChecking(true);
-      const meta = await readVideoMeta(file);
+    const fail = (message: string) => {
       setChecking(false);
-      const problem = meta && checkVideo(meta);
-      if (problem) return setError(problem);
-    } else {
-      if (file.size > MAX_BYTES) return setError("That file is larger than 250 MB. Please export a smaller version.");
-      if (file.size === 0) return setError("That file is empty.");
+      setProgress(null);
+      setStatus("");
+      setError(message);
+    };
+    // Quick checks first, so a problem shows in seconds and not after a long wait.
+    const basics = checkFile(file, MAX_PICK_MB);
+    if (basics) return fail(basics);
+    setChecking(true);
+    const { prepareVideo, probeFile, PrepareError, supportProblem } = await import("@/media/browser/prepare");
+    const unsupported = await supportProblem();
+    if (unsupported) return fail(unsupported);
+    const facts = await probeFile(file).catch((e) => (e instanceof PrepareError ? e : null));
+    if (facts instanceof Error) return fail(facts.message);
+    const problem = facts && checkVideo(facts);
+    if (problem) return fail(problem);
+    setChecking(false);
+
+    // Prepared on this device first, so a slow phone never holds a review (or credit) open.
+    setProgress(0);
+    setStatus(PHASE_COPY.convert);
+    const lock = await navigator.wakeLock?.request("screen").catch(() => null);
+    let prepared;
+    try {
+      prepared = await prepareVideo(file, {
+        maxBytes: maxUploadMb * 1024 * 1024,
+        onProgress: (p) => {
+          setProgress(p.overall * 0.9);
+          setStatus(p.model ? `Getting the speech reader ready (one time, ${mb(p.model.loaded)} of ${mb(p.model.total)} MB)…` : PHASE_COPY[p.phase]);
+        },
+      });
+    } catch (e) {
+      await lock?.release().catch(() => {});
+      if (e instanceof PrepareError) return fail(e.message);
+      console.error("[prepare]", e);
+      return fail("Something went wrong preparing your video on this device. Please try again, or try a recent Chrome.");
     }
 
-    setProgress(0);
-    const res = await fetch("/api/reviews", { method: "POST", body: JSON.stringify({ answers, board: board.map((b) => b.id) }) }).catch(() => null);
+    setStatus("Starting your review…");
+    const res = await fetch("/api/reviews", { method: "POST", body: JSON.stringify({ answers: latest.current.answers, board: latest.current.board.map((b) => b.id) }) }).catch(() => null);
     if (!res) {
-      setProgress(null);
-      return setError("Couldn't reach Video Focus Group. Check it's still running in Terminal, then try again.");
+      await lock?.release().catch(() => {});
+      return fail(hosted ? "Couldn't reach Video Focus Group. Please try again." : "Couldn't reach Video Focus Group. Check it's still running in Terminal, then try again.");
     }
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      setProgress(null);
+      await lock?.release().catch(() => {});
       setLoginHelps(Boolean(data.login));
       // Credits ran short since this page loaded: show where to add them.
       if (data.payment === "credits" && onPaymentChange) {
         const fresh = await fetch("/api/credits").then((r) => (r.ok ? r.json() : null)).catch(() => null);
         if (fresh?.payment) onPaymentChange(fresh.payment as PaymentContext);
       }
-      return setError(data.error ?? "Couldn't start the review.");
+      return fail(data.error ?? "Couldn't start the review.");
     }
-    if (direct) {
-      const target = await fetch(`/api/reviews/${data.id}/upload-url`, { method: "POST" }).catch(() => null);
-      const t = target ? await target.json().catch(() => ({})) : {};
-      if (!target?.ok || !t.url) {
-        setProgress(null);
-        return setError(t.error ?? "Couldn't reach Video Focus Group. Please try again.");
-      }
-      const sent = await uploadToStorage(t.url, file, setProgress);
-      if (!sent.ok) {
-        setProgress(null);
-        return setError(sent.error ?? "The upload failed.");
-      }
-      setProgress(1);
-      const done = await fetch(`/api/reviews/${data.id}/upload-complete`, { method: "POST", body: JSON.stringify({ name: file.name }) }).catch(() => null);
-      if (!done?.ok) {
-        const d = done ? await done.json().catch(() => ({})) : {};
-        setProgress(null);
-        return setError(d.error ?? "Your video was sent, but we couldn't confirm it. Please try again.");
-      }
-    } else {
-      const up = await uploadWithProgress(`/api/reviews/${data.id}/video`, file, setProgress);
-      if (!up.ok) {
-        setProgress(null);
-        return setError(up.error ?? "The upload failed.");
-      }
+
+    const names = [...prepared.files.keys()];
+    const target = await fetch(`/api/reviews/${data.id}/upload-urls`, { method: "POST", body: JSON.stringify({ files: names }) }).catch(() => null);
+    const t = target ? await target.json().catch(() => ({})) : {};
+    if (!target?.ok || !t.urls) {
+      await lock?.release().catch(() => {});
+      return fail(t.error ?? "Couldn't reach Video Focus Group. Please try again.");
     }
+    const total = [...prepared.files.values()].reduce((n, b) => n + b.size, 0);
+    const sent = new Map<string, number>();
+    const show = () => {
+      const done = [...sent.values()].reduce((n, x) => n + x, 0);
+      setProgress(0.9 + 0.1 * (done / total));
+      setStatus(`Sending it (${mb(done)} of ${mb(total)} MB)…`);
+    };
+    // A few at a time: the video first (it's the big one), the stills alongside.
+    const queue = [...names];
+    let failed: string | null = null;
+    const worker = async () => {
+      for (let name = queue.shift(); name && !failed; name = queue.shift()) {
+        const blob = prepared.files.get(name)!;
+        let r = await put(t.urls[name], blob, hosted, (n) => (sent.set(name!, n), show()));
+        if (!r.ok) r = await put(t.urls[name], blob, hosted, (n) => (sent.set(name!, n), show()));
+        if (!r.ok) failed = r.error ?? "Sending your video failed.";
+        else sent.set(name, blob.size);
+        show();
+      }
+    };
+    await Promise.all(Array.from({ length: 4 }, worker));
+    if (failed) {
+      await lock?.release().catch(() => {});
+      return fail(failed);
+    }
+
+    setStatus("Checking your video…");
+    const done = await fetch(`/api/reviews/${data.id}/upload-complete`, { method: "POST", body: JSON.stringify(prepared.manifest) }).catch(() => null);
+    await lock?.release().catch(() => {});
+    if (!done?.ok) {
+      const d = done ? await done.json().catch(() => ({})) : {};
+      return fail(d.error ?? "Your video was sent, but we couldn't confirm it. Please try again.");
+    }
+    setProgress(1);
     onDone();
     router.push(`/r/${data.id}`);
   }
@@ -160,7 +195,7 @@ export function UploadStep({
       </button>
       <h1 className="font-display text-[2rem] leading-tight font-extrabold text-ink sm:text-[2.6rem]">Now, the video</h1>
       <p className="mt-3 font-semibold text-ink-soft">
-        {direct ? `A vertical MP4, MOV or WebM, up to 3 minutes and ${maxUploadMb} MB.` : "MP4, MOV or WebM, up to 3 minutes and 250 MB."}
+        A vertical MP4, MOV or WebM, up to 3 minutes. Your device makes a smaller copy before sending it.
       </p>
 
       {payment?.method && (
@@ -217,7 +252,8 @@ export function UploadStep({
             </p>
           ) : uploading ? (
             <div aria-live="polite">
-              <p className="font-display font-extrabold text-xl text-ink">{progress! < 1 ? "Uploading…" : "Checking your video…"}</p>
+              <p className="font-display font-extrabold text-xl text-ink">{status}</p>
+              <p className="mt-2 text-sm text-ink-soft">Keep this tab open until it&apos;s sent. After that you can close it.</p>
               <div className="mx-auto mt-5 h-2 max-w-xs overflow-hidden rounded-full bg-paper-deep">
                 <div className="h-full rounded-full bg-accent transition-[width] duration-200" style={{ width: `${Math.round(progress! * 100)}%` }} />
               </div>
@@ -236,7 +272,7 @@ export function UploadStep({
               <input
                 ref={input}
                 type="file"
-                accept={direct ? ACCEPT : LOCAL_ACCEPT}
+                accept={ACCEPT}
                 className="sr-only"
                 onChange={(e) => {
                   const f = e.target.files?.[0];

@@ -1,17 +1,17 @@
 import { z } from "zod";
 import { connection } from "next/server";
 import type Anthropic from "@anthropic-ai/sdk";
-import { reviewDir, updateReview, type ReviewRecord } from "@/server/reviews";
+import { getReview, reviewDir, updateReview, type ReviewRecord } from "@/server/reviews";
 import { accessibleReview, mustSignIn, signInResponse } from "@/server/auth";
 import { whoIsCalling } from "@/server/client";
 import { enqueue } from "@/server/jobs";
 import { kickNow } from "@/server/kick";
-import { restoreFile } from "@/server/storage";
 import { addMessage, getThread } from "@/server/followups";
 import { getProfile } from "@/experts/load";
 import { followupSystem, INSPECT_TOOL, MODELS, streamText } from "@/ai/followup";
 import { AiUnavailable, BudgetExceeded } from "@/ai/client";
-import { denseSample } from "@/media/pipeline";
+import { framesFromSprites } from "@/server/inspect";
+import { isHosted } from "@/server/config";
 import { perceiveFrames } from "@/ai/perceive";
 import { evidenceSpan, type Ledger } from "@/core/evidence";
 import { spendFollowup, LimitReached, limitResponse } from "@/server/budget";
@@ -30,18 +30,20 @@ export async function GET(req: Request, ctx: RouteContext<"/api/reviews/[id]/cha
 async function inspect(r: ReviewRecord, ledger: Ledger, seconds: number, focus: string) {
   const reviewId = r.id;
   const dir = reviewDir(reviewId);
-  // The working copy may have been cleared; a kept review's video comes back from storage.
-  if (r.userId && r.storedFiles.includes("video.mp4")) await restoreFile(r.userId, reviewId, "video.mp4");
   const t = Math.min(Math.max(0, seconds), ledger.coverage.durationSec);
-  const added = await denseSample(dir, ledger.frames, ledger.shots, ledger.coverage.durationSec, t, 1.5);
+  const added = await framesFromSprites(r, ledger, t, 1.5);
   const perception = added.length
     ? await perceiveFrames(reviewId, dir, added, { intent: r.intent, transcript: ledger.transcript })
     : [];
   ledger.frames.push(...added);
   ledger.perception.push(...perception);
-  await updateReview(reviewId, { ledger });
-  // New frames join the stored record too.
-  if (r.userId && added.length) {
+  // Hosted: the new stills are in storage already. Local: they join an account's copy, if it's kept in one.
+  const fresh = await getReview(reviewId);
+  await updateReview(reviewId, {
+    ledger,
+    ...(isHosted() && added.length ? { storedFiles: [...new Set([...(fresh?.storedFiles ?? []), ...added.map((f) => f.file)])] } : {}),
+  });
+  if (!isHosted() && r.userId && added.length) {
     await enqueue(reviewId, "store");
     kickNow();
   }
@@ -50,7 +52,9 @@ async function inspect(r: ReviewRecord, ledger: Ledger, seconds: number, focus: 
   const byId = new Map(ledger.perception.map((p) => [p.frameId, p]));
   const speech = ledger.transcript.filter((s) => s.end >= t - 1.5 && s.start <= t + 1.5);
   return [
-    `Close look around the requested moment (focus: ${focus}). ${added.length} new frames extracted.`,
+    added.length || ledger.sprites?.length
+      ? `Close look around the requested moment (focus: ${focus}). ${added.length} new frames added.`
+      : `Close look around the requested moment (focus: ${focus}). This review was made before close-up stills were kept, so no new frames could be added; only the frames already sampled are listed.`,
     ...window.map((f) => {
       const p = byId.get(f.id);
       return `${f.id} @${f.t.toFixed(2)}s: ${p ? `${p.description} | on-screen text: ${p.onScreenText || "none"}` : "(not described)"}`;

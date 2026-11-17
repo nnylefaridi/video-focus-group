@@ -41,7 +41,7 @@ vi.mock("@/server/billing", async (importOriginal) => ({
 }));
 
 let reviewsRoute: typeof import("@/app/api/reviews/route");
-let videoRoute: typeof import("@/app/api/reviews/[id]/video/route");
+let filesRoute: typeof import("@/app/api/reviews/[id]/files/[...file]/route");
 let retryRoute: typeof import("@/app/api/reviews/[id]/retry/route");
 let chatRoute: typeof import("@/app/api/reviews/[id]/chat/route");
 let reviews: typeof import("@/server/reviews");
@@ -51,7 +51,7 @@ let board: string[];
 
 beforeAll(async () => {
   reviewsRoute = await import("@/app/api/reviews/route");
-  videoRoute = await import("@/app/api/reviews/[id]/video/route");
+  filesRoute = await import("@/app/api/reviews/[id]/files/[...file]/route");
   retryRoute = await import("@/app/api/reviews/[id]/retry/route");
   chatRoute = await import("@/app/api/reviews/[id]/chat/route");
   reviews = await import("@/server/reviews");
@@ -100,7 +100,7 @@ describe("hosted mode, signed out", () => {
     const id = reviews.newReviewId();
     await reviews.createReview({ id, answers: [], intent: { category: "creator" }, board, title: "old", anonId: ANON });
 
-    const up = await videoRoute.PUT(new Request(`https://panel.example.com/api/reviews/${id}/video`, { method: "PUT", body: "not a video" }), ctx(id));
+    const up = await filesRoute.PUT(new Request(`https://panel.example.com/api/reviews/${id}/files/video.mp4`, { method: "PUT", body: "not a video" }), { params: Promise.resolve({ id, file: ["video.mp4"] }) });
     expect(up.status).toBe(401);
     expect((await up.json()).login).toBe(true);
     expect((await reviews.getReview(id))?.stage).toBe("uploading");
@@ -121,7 +121,7 @@ describe("hosted mode, signed in", () => {
     state.user = { sub: "4f1c1f2e-8e0e-4b9a-9d55-0d6c1b2a3c4d", email: "maker@example.com" };
     const id = reviews.newReviewId();
     await reviews.createReview({ id, answers: [], intent: { category: "creator" }, board, title: "t", userId: state.user.sub });
-    const res = await videoRoute.PUT(new Request(`https://panel.example.com/api/reviews/${id}/video`, { method: "PUT", body: "x" }), ctx(id));
+    const res = await filesRoute.PUT(new Request(`https://panel.example.com/api/reviews/${id}/files/video.mp4`, { method: "PUT", body: "x" }), { params: Promise.resolve({ id, file: ["video.mp4"] }) });
     expect(res.status).toBe(410);
     expect((await res.json()).error).toMatch(/straight to storage/);
     expect((await reviews.getReview(id))?.stage).toBe("uploading");

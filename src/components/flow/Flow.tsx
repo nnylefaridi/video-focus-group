@@ -50,7 +50,17 @@ function load(): Saved | null {
  * `payment` (hosted mode, signed in) is how the account pays; with no choice yet, the
  * payment step comes before the upload. Local mode passes neither.
  */
-export function Flow({ signInFirst = false, payment = null, maxUploadMb }: { signInFirst?: boolean; payment?: PaymentContext | null; maxUploadMb?: number }) {
+export function Flow({
+  signInFirst = false,
+  hosted = false,
+  payment = null,
+  maxUploadMb = 250,
+}: {
+  signInFirst?: boolean;
+  hosted?: boolean;
+  payment?: PaymentContext | null;
+  maxUploadMb?: number;
+}) {
   const [saved] = useState(load);
   const [pay, setPay] = useState(payment);
   /** Changing the remembered payment choice from the upload step. */
@@ -212,6 +222,7 @@ export function Flow({ signInFirst = false, payment = null, maxUploadMb }: { sig
               board={boardCards}
               payment={pay}
               maxUploadMb={maxUploadMb}
+              hosted={hosted}
               onChangePayment={pay ? () => setChoosingPay(true) : undefined}
               onPaymentChange={pay ? setPay : undefined}
               onBack={() => setStep("board")}

@@ -1,6 +1,6 @@
 // What `npm run setup` checks, and the install commands it prints.
-// macOS gets Homebrew commands. Ubuntu/Debian gets apt plus a whisper.cpp build
-// that was run on Ubuntu 24.04. Other systems get the tool names, not a guessed package command.
+// Only Node.js is needed: videos are prepared in the browser, so there's no ffmpeg or whisper.cpp.
+// macOS gets Homebrew commands; Ubuntu/Debian gets the nodejs.org tarball that was run on Ubuntu 24.04.
 import { execFileSync } from "node:child_process";
 import os from "node:os";
 
@@ -36,17 +36,6 @@ export function commandPath(cmd) {
   } catch {
     return null;
   }
-}
-
-/** Current whisper.cpp CLI, then the older package name for the same program. */
-export const WHISPER_NAMES = ["whisper-cli", "whisper-cpp"];
-
-export function findWhisper(lookup = commandPath) {
-  for (const name of WHISPER_NAMES) {
-    const found = lookup(name);
-    if (found) return { name, path: found };
-  }
-  return null;
 }
 
 /** nodejs.org tarball arch, or null when we don't know the filename. */
@@ -85,65 +74,12 @@ function nodeInstallLines(platform, release, arch) {
   return ["Install Node.js 20.9 or newer from https://nodejs.org. The setup script's install commands were checked on Ubuntu 24.04, and it prints Homebrew commands on macOS."];
 }
 
-function ffmpegInstallLines(platform, release) {
-  if (platform === "darwin") {
-    return ["brew install ffmpeg", "", "Then check that both ffmpeg and ffprobe run."];
-  }
-  if (isDebianFamily(release)) {
-    return ["sudo apt update", "sudo apt install -y ffmpeg", "", "On Ubuntu 24.04 that package includes both ffmpeg and ffprobe."];
-  }
-  return ["Install ffmpeg so both ffmpeg and ffprobe are on your PATH. On Ubuntu 24.04 the package is ffmpeg."];
-}
-
-function whisperBuildLines() {
-  return [
-    "sudo apt update",
-    "sudo apt install -y build-essential cmake git",
-    "git clone --depth 1 --branch v1.9.5 https://github.com/ggml-org/whisper.cpp.git",
-    "cd whisper.cpp",
-    "cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++",
-    "cmake --build build -j 2",
-    "sudo cmake --install build",
-    "sudo ldconfig",
-    "whisper-cli -h",
-    "",
-    "If whisper-cli cannot find libwhisper.so.1, run sudo ldconfig again.",
-    "Panel runs whisper-cli, or a program named whisper-cpp if that's the name on your PATH. An old binary named main only prints a retirement notice. Set WHISPER_BIN in .env.local to use a different path.",
-  ];
-}
-
-function whisperInstallLines(platform, release) {
-  if (platform === "darwin") {
-    return [
-      "brew install whisper-cpp",
-      "",
-      "That formula's program is named whisper-cli. Check with: whisper-cli -h",
-      "An older build's program was named main. That name is retired; install the formula again so you get whisper-cli.",
-    ];
-  }
-  const intro =
-    release?.id === "ubuntu" && release?.versionId === "24.04"
-      ? "Ubuntu 24.04 does not package whisper.cpp (apt has no whisper.cpp candidate). Build whisper-cli from tag v1.9.5, which is the build that was run here:"
-      : "Build whisper-cli from tag v1.9.5. This build was run on Ubuntu 24.04, where apt does not ship whisper.cpp:";
-  if (platform === "linux" && !isDebianFamily(release)) {
-    return [
-      "Install a C compiler, cmake and git, then build whisper-cli. The apt lines below are for Ubuntu/Debian; the cmake steps are what was run on Ubuntu 24.04:",
-      "",
-      ...whisperBuildLines(),
-    ];
-  }
-  return [intro, "", ...whisperBuildLines()];
-}
-
 /**
  * @param {{
  *   platform: string,
  *   release: { id: string, versionId: string, idLike: string, pretty?: string },
  *   arch: string,
  *   nodeVersion: string,
- *   has: (cmd: string) => boolean,
- *   whisper: { name: string, path: string } | null,
- *   whisperHelp: { ok: boolean, libraries: boolean, detail: string } | null,
  * }} opts
  */
 export function installPlan(opts) {
@@ -155,28 +91,6 @@ export function installPlan(opts) {
       lines: nodeInstallLines(opts.platform, release, opts.arch),
     });
   }
-  const missingMedia = ["ffmpeg", "ffprobe"].filter((cmd) => !opts.has(cmd));
-  if (missingMedia.length) {
-    problems.push({
-      title: `Missing ${missingMedia.join(" and ")}.`,
-      lines: ffmpegInstallLines(opts.platform, release),
-    });
-  }
-  if (!opts.whisper) {
-    problems.push({
-      title: "Missing whisper-cli (whisper.cpp).",
-      lines: whisperInstallLines(opts.platform, release),
-    });
-  } else if (opts.whisperHelp && !opts.whisperHelp.ok) {
-    const lines = opts.whisperHelp.libraries
-      ? ["The program is installed, but the linker can't see its libraries.", "", "sudo ldconfig", "", "Then run whisper-cli -h. It should exit without an error."]
-      : [
-          "That program doesn't look like the whisper.cpp CLI Panel calls (flags -m, -f, -ojf, -of, -np and -l).",
-          "",
-          ...whisperInstallLines(opts.platform, release),
-        ];
-    if (opts.whisperHelp.detail) lines.push("", "It printed:", ...opts.whisperHelp.detail.split("\n").slice(0, 6));
-    problems.push({ title: `${opts.whisper.name} is on your PATH, but it doesn't run.`, lines });
-  }
+  // Nothing else: videos are prepared in the browser, so ffmpeg and whisper.cpp aren't needed.
   return { ok: problems.length === 0, problems };
 }

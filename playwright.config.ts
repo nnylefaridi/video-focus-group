@@ -8,7 +8,7 @@ if (fs.existsSync(".env.local")) process.loadEnvFile(".env.local");
 export default defineConfig({
   testDir: "tests/e2e",
   // Runs against its own hosted-mode server: npm run e2e:hosted (playwright.hosted.config.ts).
-  testIgnore: /hosted-server\.spec\.ts/,
+  testIgnore: /(hosted-server|browser-processing)\.spec\.ts/,
   timeout: 60_000,
   use: { baseURL: "http://127.0.0.1:3000" },
   projects: [

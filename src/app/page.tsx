@@ -11,11 +11,11 @@ import { getPaymentContext } from "@/server/billing";
  */
 async function Start() {
   await connection();
-  if (!isHosted()) return <FlowLoader />;
+  if (!isHosted()) return <FlowLoader maxUploadMb={MAX_UPLOAD_MB} />;
   const { userId } = await getViewer();
   if (!userId) return <FlowLoader signInFirst />;
   // Only the size limit goes to the browser; where uploads land is the server's business.
-  return <FlowLoader payment={await getPaymentContext(userId)} maxUploadMb={MAX_UPLOAD_MB} />;
+  return <FlowLoader hosted payment={await getPaymentContext(userId)} maxUploadMb={MAX_UPLOAD_MB} />;
 }
 
 export default function Home() {

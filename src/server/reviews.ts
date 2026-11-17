@@ -1,3 +1,4 @@
+import type { Manifest } from "@/media/analysis/manifest";
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
@@ -20,7 +21,15 @@ export type VideoMeta = {
 };
 
 /** Frame descriptions saved batch by batch (keyed by position) for one exact set of frames (perceptionKey). */
-export type Draft = { perception?: { key: string; batches: Record<string, FramePerception[]> } };
+/**
+ * Work in progress for a review. `manifest` is what the browser sent with its prepared video
+ * (already checked by upload-complete); `perception` holds frame descriptions saved batch by
+ * batch (keyed by position) for one exact set of frames (perceptionKey).
+ */
+export type Draft = {
+  manifest?: Manifest;
+  perception?: { key: string; batches: Record<string, FramePerception[]> };
+};
 
 export type Cost = { usd: number; calls: { label: string; model: string; usd: number; inTok: number; outTok: number }[] };
 
@@ -221,13 +230,12 @@ export async function deleteReview(id: string, opts: { refund?: boolean } = {}) 
     await t("DELETE FROM app.reviews WHERE id = $1", [id]);
   });
   fs.rmSync(reviewDir(id), { recursive: true, force: true });
-  if (r?.userId && r.storedFiles.length) {
+  if (r?.userId && isHosted()) {
+    // Everything under the review's folder, including files sent but never checked.
+    const { removeAllStoredMedia } = await import("./storage");
+    await removeAllStoredMedia(r.userId, id).catch((e) => console.error("[storage] remove failed", e));
+  } else if (r?.userId && r.storedFiles.length) {
     const { removeStoredMedia } = await import("./storage");
     await removeStoredMedia(r.userId, id, r.storedFiles).catch((e) => console.error("[storage] remove failed", e));
-  }
-  // A video sent straight to storage that was never processed (hosted mode).
-  if (r?.userId && !r.ledger && isHosted()) {
-    const { removeUpload } = await import("./storage");
-    await removeUpload(r.userId, id).catch((e) => console.error("[storage] removing the upload failed", e));
   }
 }

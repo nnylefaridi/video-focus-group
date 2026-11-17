@@ -59,5 +59,5 @@ export const config = {
   // Stripe's webhook has no session and is checked by its signature over the untouched body.
   // The host's health check (api/health) needs no session either, and must answer at any address.
   // (API routes that do reach the proxy are never redirected: see canonicalLocation.)
-  matcher: ["/((?!_next/static|_next/image|api/media|api/reviews/.*/video|api/stripe/webhook|api/health|favicon.ico|.*\\.(?:png|jpg|jpeg|svg|webp)$).*)"],
+  matcher: ["/((?!_next/static|_next/image|api/media|api/reviews/.*/files|api/stripe/webhook|api/health|favicon.ico|.*\\.(?:png|jpg|jpeg|svg|webp)$).*)"],
 };

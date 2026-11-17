@@ -21,7 +21,7 @@ ${SPOKEN_STYLE}`;
 export const INSPECT_TOOL: Anthropic.Beta.BetaTool = {
   name: "inspect_moment",
   description:
-    "Take a closer look at one moment of the video: extracts frames at 8 per second for about 1.5 seconds either side of the given time and describes each one. Returns new frame ids you can cite. Use it when asked about a specific moment or anything between the sampled frames.",
+    "Take a closer look at one moment of the video: takes frames at 4 per second for about 1.5 seconds either side of the given time (from stills made when the video was prepared) and describes each one. Returns new frame ids you can cite. Use it when asked about a specific moment or anything between the sampled frames.",
   input_schema: {
     type: "object",
     properties: {

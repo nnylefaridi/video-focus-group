@@ -4,7 +4,7 @@ import { FramePerception, type Frame, type Ledger } from "@/core/evidence";
 import type { IntentFields } from "@/core/intent";
 import { callStructured, MODELS } from "./client";
 import { labeledFrame, renderIntent } from "./render";
-import { mapLimit } from "@/media/exec";
+import { mapLimit } from "@/lib/mapLimit";
 
 const Out = z.object({ frames: z.array(FramePerception) });
 
