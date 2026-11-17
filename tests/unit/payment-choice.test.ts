@@ -83,8 +83,10 @@ describe("the first screen in hosted mode", () => {
 
   it("shows the two choices with their terms and the demo playing, muted", () => {
     const out = renderToString(createElement(StartPay, { pay: null, onPayment: () => {} }));
-    expect(out).toContain("How do you want to pay?");
-    expect(out).toContain("Pay with credits");
+    expect(out).toContain("Make your videos WORK");
+    expect(out).toContain("Pay as you go");
+    expect(out).toContain("Sound on");
+    expect(out).not.toContain("Either way");
     expect(out).toContain("$10");
     expect(out).toContain("plus 20%");
     expect(out).toContain("Use your own Anthropic key");
