@@ -75,6 +75,16 @@ export function Flow({
 }) {
   const [saved] = useState(load);
   const [pay, setPay] = useState(payment);
+  /**
+   * A new payment context from the server replaces ours. Logging in from this page and coming
+   * back is a client navigation that can keep this component, and its state, from before the
+   * login, when there was none; without this the payment question would be skipped.
+   */
+  const [payFromServer, setPayFromServer] = useState(payment);
+  if (payment !== payFromServer) {
+    setPayFromServer(payment);
+    setPay(payment);
+  }
   /** Changing the remembered payment choice from the upload step. */
   const [choosingPay, setChoosingPay] = useState(false);
   /** A payment choice made on this visit: its setup (key or top-up) shows next, without asking again. */
