@@ -3,6 +3,7 @@ import { getKeyInfo, KEY_REJECTED, type KeyInfo } from "./apikeys";
 import { NEEDS_KEY } from "@/core/ownkey";
 import { needsCreditsMessage, type CreditSummary } from "@/core/credits";
 import { creditsProblem, creditSummary } from "./credits";
+import { CREDITS_PAUSED, creditsPaused } from "./ownerkey";
 
 /**
  * Hosted mode: how an account pays for its reviews. Local mode never asks; reviews
@@ -44,7 +45,7 @@ export async function getPaymentContext(userId: string): Promise<PaymentContext>
   const base = { method, key, credits };
   if (!method) return { ...base, ready: false, problem: CHOOSE_FIRST };
   if (method === "credits") {
-    const problem = creditsProblem(credits);
+    const problem = creditsPaused() ? CREDITS_PAUSED : creditsProblem(credits);
     return { ...base, ready: !problem, problem };
   }
   if (!key) return { ...base, ready: false, problem: NEEDS_KEY };

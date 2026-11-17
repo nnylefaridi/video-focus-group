@@ -1,6 +1,7 @@
 import { q, tx, type Query } from "./db";
 import { isHosted, SPEND_LIMITS } from "./config";
-import { reserveCredits } from "./credits";
+import { NotEnoughCredits, reserveCredits } from "./credits";
+import { CREDITS_PAUSED, creditsPaused } from "./ownerkey";
 import { INSERT_REVIEW, insertReviewParams } from "./reviews";
 import type { Who } from "./client";
 import type { PaymentMethod } from "./billing";
@@ -8,8 +9,9 @@ import { authReady } from "@/lib/supabase";
 
 /**
  * Two layers of protection for the API key:
- * - App-wide daily and monthly caps on what every paid call (reviews, answer
- *   checks, follow-ups) costs, from one log of those calls.
+ * - App-wide daily and monthly caps on what paid calls on the server's key cost when
+ *   nobody prepaid them (local mode, anything not on credits), from one log of calls.
+ *   Calls paid with prepaid credits, or on an account's own key, aren't capped.
  * - Per-person limits: each account's own when signed in, the network's (hashed
  *   IP) when signed out, plus an overall ceiling per network (see client.ts). Each
  *   use is reserved before the paid work starts, inside locks on those keys, so
@@ -52,11 +54,15 @@ function startOfMonth(): number {
   return new Date(d.getFullYear(), d.getMonth(), 1).getTime();
 }
 
-/** What the app's key has spent since t. Calls on people's own keys cost the app nothing, so they're left out. */
-async function spentSince(t: number, query: Query = q, ownKeys = false): Promise<number> {
+/**
+ * What was spent since t: by default what the caps count, the server's key with nothing
+ * prepaid (calls on people's own keys cost the app nothing, and calls on credits were paid
+ * for up front). "own_key" or "credits" sums just those.
+ */
+async function spentSince(t: number, query: Query = q, paidWith: PaymentMethod | null = null): Promise<number> {
   const [row] = await query<{ usd: number }>(
-    `SELECT COALESCE(SUM(usd), 0)::float8 AS usd FROM app.spend WHERE at >= $1 AND paid_with IS ${ownKeys ? "NOT DISTINCT" : "DISTINCT"} FROM 'own_key'`,
-    [t],
+    `SELECT COALESCE(SUM(usd), 0)::float8 AS usd FROM app.spend WHERE at >= $1 AND paid_with ${paidWith ? "= $2::text::app.payment_method" : "IS NULL"}`,
+    paidWith ? [t, paidWith] : [t],
   );
   return Number(row.usd);
 }
@@ -72,7 +78,12 @@ export async function spendSummary(query: Query = q) {
 
 /** What people's own keys spent through Panel this month. Recorded, but not the app's money. */
 export async function ownKeySpendThisMonth(query: Query = q): Promise<number> {
-  return spentSince(startOfMonth(), query, true);
+  return spentSince(startOfMonth(), query, "own_key");
+}
+
+/** What credit-paid calls cost Anthropic this month (prepaid, so not capped). */
+export async function creditSpendThisMonth(query: Query = q): Promise<number> {
+  return spentSince(startOfMonth(), query, "credits");
 }
 
 /** Throws before any paid call once the app's budget for today or this month is used up. */
@@ -121,8 +132,10 @@ function personalLimit(who: Who, signedInMessage: string, signedOutMessage: stri
 export async function startReview(who: Who, review: Parameters<typeof insertReviewParams>[0]) {
   await tx(async (t, lock) => {
     await lockAllowances(lock, who);
-    // The app's budget protects the server's key; a review on the person's own key doesn't use it.
-    if (review.paidWith !== "own_key") {
+    // The app's budget protects the server's key from spend nobody prepaid: a review on the
+    // person's own key doesn't use it, and one on credits is paid for up front.
+    if (review.paidWith === "credits" && creditsPaused()) throw new NotEnoughCredits(CREDITS_PAUSED);
+    if (review.paidWith !== "own_key" && review.paidWith !== "credits") {
       const s = await assertWithinSpendLimits(t);
       const room = Math.min(s.dailyLimit - s.today, s.monthlyLimit - s.month);
       if (room < SPEND_LIMITS.typicalReviewUsd)
@@ -149,10 +162,11 @@ export async function startReview(who: Who, review: Parameters<typeof insertRevi
 }
 
 /** Answer checks in the questionnaire are cheap, but unlimited typing shouldn't run up a bill. */
-export async function spendAnswerCheck(who: Who) {
+export async function spendAnswerCheck(who: Who, paidWith: PaymentMethod | null = null) {
   await tx(async (t, lock) => {
     await lockAllowances(lock, who);
-    await assertWithinSpendLimits(t);
+    if (paidWith === "credits" && creditsPaused()) throw new NotEnoughCredits(CREDITS_PAUSED);
+    if (paidWith !== "own_key" && paidWith !== "credits") await assertWithinSpendLimits(t);
     const hourAgo = Date.now() - 3600_000;
     if ((await used(t, "client_key", who.person, "answer_check", hourAgo)) >= SPEND_LIMITS.maxAnswerChecksPerHour)
       throw personalLimit(
@@ -191,7 +205,8 @@ export async function spendFollowup(who: Who, reviewId: string): Promise<number 
     const [review] = await t<{ paid_with: string | null; user_id: string | null }>("SELECT paid_with::text AS paid_with, user_id FROM app.reviews WHERE id = $1", [
       reviewId,
     ]);
-    if (review?.paid_with !== "own_key") await assertWithinSpendLimits(t);
+    if (review?.paid_with === "credits" && creditsPaused()) throw new NotEnoughCredits(CREDITS_PAUSED);
+    if (review?.paid_with !== "own_key" && review?.paid_with !== "credits") await assertWithinSpendLimits(t);
     const [row] = await t<{ n: number }>("SELECT COUNT(*)::int AS n FROM app.usage WHERE review_id = $1 AND kind = 'followup'", [reviewId]);
     if (Number(row.n) >= SPEND_LIMITS.maxFollowupsPerReview)
       throw new LimitReached(`This review has reached its limit of ${SPEND_LIMITS.maxFollowupsPerReview} follow-up questions.`);
