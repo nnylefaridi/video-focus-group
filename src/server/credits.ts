@@ -2,6 +2,7 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import { q, tx, type Query } from "./db";
 import { ANSWER_STALE_MS } from "./followups";
 import { COST_CAP_USD, FOLLOWUP_COST_CAP_USD } from "./config";
+import { CREDITS_PAUSED, creditsPaused } from "./ownerkey";
 import {
   formatMicros,
   followupNeedsCreditsMessage,
@@ -206,9 +207,10 @@ type ReservationRow = { id: string; user_id: string; review_id: string; purpose:
 /**
  * Ends a reservation: charges what its calls cost x MARGIN (rounded up) and releases
  * the rest. Used when a review finishes or fails, and when a follow-up answer ends.
- * Settling twice does nothing the second time. Returns what was charged.
+ * Settling twice does nothing the second time. Returns what was charged. `waive`
+ * charges nothing and releases it all (a run the app's own key failed).
  */
-export async function settleReservation(id: number): Promise<number> {
+export async function settleReservation(id: number, opts: { waive?: boolean } = {}): Promise<number> {
   return tx(async (t) => {
     const [peek] = await t<{ user_id: string }>("SELECT user_id FROM app.credit_reservations WHERE id = $1", [id]);
     if (!peek) return 0;
@@ -220,8 +222,9 @@ export async function settleReservation(id: number): Promise<number> {
     const owed = withMargin(Number(r.cost));
     // Never more than was set aside. holdForCall makes sure it never comes to this; if it
     // somehow did, the difference is logged rather than taken from credit that isn't there.
-    const charge = Math.min(owed, amount);
-    if (owed > amount) console.error(`[credits] reservation ${id} cost ${formatMicros(owed)} with margin, more than the ${formatMicros(amount)} set aside`);
+    const charge = opts.waive ? 0 : Math.min(owed, amount);
+    if (opts.waive && owed > 0) console.log(`[credits] reservation ${id}: ${formatMicros(owed)} waived, the app's Anthropic key failed`);
+    if (!opts.waive && owed > amount) console.error(`[credits] reservation ${id} cost ${formatMicros(owed)} with margin, more than the ${formatMicros(amount)} set aside`);
     await t("UPDATE app.credit_reservations SET status = 'settled', charged = $2, in_flight = 0, settled_at = $3 WHERE id = $1", [id, charge, Date.now()]);
     const base = { reservationId: id, reviewId: r.review_id };
     if (charge > 0) acct = await post(t, r.user_id, acct, { balance: -charge, reserved: -charge }, { ...base, kind: "charge", amount: -charge, note: r.purpose });
@@ -408,8 +411,12 @@ export async function clawBack(t: Query, p: { paymentIntent: string; totalCents:
   return `took back ${formatMicros(take)}`;
 }
 
-/** Top-ups are refused while the account is on hold: credit it couldn't use isn't sold to it. */
+/**
+ * Top-ups are refused while the account is on hold, and while credits are paused because
+ * the app's Anthropic key isn't working: credit that can't be used isn't sold.
+ */
 export async function assertCanTopUp(userId: string): Promise<void> {
+  if (creditsPaused()) throw new NotEnoughCredits(CREDITS_PAUSED);
   const s = await creditSummary(userId);
   if (s.onHold) throw new NotEnoughCredits(ON_HOLD);
 }

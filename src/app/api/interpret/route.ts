@@ -8,6 +8,7 @@ import { whoIsCalling } from "@/server/client";
 import { getViewer } from "@/server/auth";
 import { isHosted } from "@/server/config";
 import { getPaymentContext, paymentResponse } from "@/server/billing";
+import { creditsResponse, NotEnoughCredits } from "@/server/credits";
 
 const Body = z.object({
   questionId: z.string(),
@@ -34,9 +35,10 @@ export async function POST(req: Request) {
     payer = { userId, method: payment.method };
   }
   try {
-    await spendAnswerCheck(whoIsCalling(req.headers, userId));
+    await spendAnswerCheck(whoIsCalling(req.headers, userId), payer?.method ?? null);
   } catch (e) {
     if (e instanceof LimitReached) return limitResponse(e);
+    if (e instanceof NotEnoughCredits) return creditsResponse(e);
     throw e;
   }
   try {

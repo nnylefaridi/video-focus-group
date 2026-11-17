@@ -9,6 +9,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import Anthropic from "@anthropic-ai/sdk";
 
 process.env.DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "panel-runner-"));
 
@@ -278,6 +279,25 @@ describe("when a job fails", () => {
     expect((await reviews.getReview(reviewId))!.error).toBe("The AI service is busy right now. Try again in a minute.");
   });
 
+  it("retries Anthropic being busy, overloaded or down (429, 529, 5xx) with backoff, and recovers", async () => {
+    const { jobId } = await newJob();
+    const gaveUp = vi.fn(async () => {});
+    const errors = [apiError(529), apiError(429), apiError(503)];
+    let calls = 0;
+    const runner = makeRunner({
+      work: async () => {
+        const e = errors[calls++];
+        if (e) throw e;
+      },
+      onGiveUp: gaveUp,
+    });
+    await runner.kick();
+    await runner.idle();
+    expect(calls).toBe(4);
+    expect(gaveUp).not.toHaveBeenCalled();
+    expect(await lease(jobId)).toMatchObject({ status: "done", attempts: 4 });
+  });
+
   it("retries copying media to storage a few times, and never fails the review over it", async () => {
     const { reviewId, jobId } = await newJob("store");
     await reviews.updateReview(reviewId, { stage: "done" });
@@ -297,6 +317,9 @@ describe("when a job fails", () => {
     for (const e of [new Error("connect ECONNREFUSED 127.0.0.1:5432"), new Error("fetch failed"), Object.assign(new Error("x"), { code: "ETIMEDOUT" }), new Error("Connection terminated unexpectedly")])
       expect(isTransient(e)).toBe(true);
     for (const e of [new Error("That video has no picture."), new Error("overloaded"), "plain text"]) expect(isTransient(e)).toBe(false);
+    // Anthropic's own errors, by status: busy, overloaded and server trouble come back; the rest don't.
+    for (const status of [429, 500, 502, 503, 529]) expect(isTransient(apiError(status))).toBe(true);
+    for (const status of [400, 401, 403, 404, 413]) expect(isTransient(apiError(status))).toBe(false);
   });
 });
 
@@ -332,3 +355,8 @@ describe("the shared runner", () => {
     expect(runnerMod.getRunner()).toBe(runnerMod.getRunner());
   });
 });
+
+/** An error as the Anthropic SDK throws it for this HTTP status. */
+function apiError(status: number) {
+  return Anthropic.APIError.generate(status, { type: "error", error: { type: "api_error", message: `status ${status}` } }, undefined, new Headers());
+}

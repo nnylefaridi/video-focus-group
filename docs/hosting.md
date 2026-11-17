@@ -86,7 +86,7 @@ curl https://example.com/api/health      # {"ok":true}
 | `HOSTNAME`, `PORT` | no | Where `server.js` listens. Set by the Dockerfile (`0.0.0.0`, `8080`) and `render.yaml`. | — | |
 | `NEXT_PUBLIC_MODEL_HOST`, `NEXT_PUBLIC_ORT_WASM_BASE` | no | Where browsers get the speech model and its runtime (defaults: Hugging Face and jsDelivr). Built into the pages: to change them, add them as `ARG`s to the Dockerfile's build stage. | You | |
 | `FOLLOWUP_COST_CAP_USD`, `REVIEW_COST_CAP_USD` | no | Most one follow-up answer / one review may cost (defaults 1.5 and 3). | You | |
-| `DAILY_LIMIT_USD`, `MONTHLY_LIMIT_USD` | no | App-wide spending ceilings on the server key (defaults 10 and 40). **Raise these for a public site**, or one busy day stops everyone. | You | `50`, `500` |
+| `DAILY_LIMIT_USD`, `MONTHLY_LIMIT_USD` | no | App-wide spending ceilings on the server key for spend nobody prepaid (defaults 10 and 40). Calls paid with prepaid credits and calls on people's own keys don't count toward them. If Anthropic refuses the server key (out of credit, or 401), the logs show an `[ALERT]` line and credits pause for 10 minutes: no top-ups and no new credit-paid reviews, and nobody is charged for the failed review. | You | `50`, `500` |
 | `MAX_REVIEWS_PER_DAY`, `MAX_FOLLOWUPS_PER_REVIEW`, `MAX_ANSWER_CHECKS_PER_HOUR`, `MAX_REVIEWS_PER_NETWORK_PER_DAY`, `MAX_ANSWER_CHECKS_PER_NETWORK_PER_HOUR`, `MAX_KEY_CHECKS_PER_HOUR` | no | Per-person and per-network limits. Defaults are in `.env.example`. | You | `8` |
 | `DATA_DIR` | no | Scratch folder. Set by the Dockerfile (`/tmp/panel-data`). | — | |
 

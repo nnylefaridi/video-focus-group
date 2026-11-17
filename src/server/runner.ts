@@ -51,9 +51,12 @@ export function friendly(e: unknown): string {
   return msg.length > 300 ? `${msg.slice(0, 300)}…` : msg;
 }
 
-/** Trouble reaching a service (Postgres, storage, Anthropic), as opposed to something wrong with the review itself. */
+/** Trouble reaching a service (Postgres, storage, Anthropic), or Anthropic busy or overloaded, as opposed to something wrong with the review itself. */
 export function isTransient(e: unknown): boolean {
   if (e instanceof AiUnavailable || e instanceof BudgetExceeded || e instanceof NotEnoughCredits) return false;
+  // Anthropic busy (429), overloaded (529) or having trouble (5xx), after the SDK's own retries.
+  const status = e instanceof Error ? (e as { status?: unknown }).status : undefined;
+  if (typeof status === "number" && (status === 429 || status === 529 || status >= 500)) return true;
   const code = (e as { code?: unknown } | null)?.code;
   const text = `${typeof code === "string" ? code : ""} ${e instanceof Error ? `${e.message} ${String((e as { cause?: unknown }).cause ?? "")}` : String(e)}`;
   return /ECONNRESET|ECONNREFUSED|ETIMEDOUT|EAI_AGAIN|ENOTFOUND|EPIPE|UND_ERR|CONNECT_TIMEOUT|fetch failed|socket hang up|connection terminated|Connection terminated|network/i.test(text);

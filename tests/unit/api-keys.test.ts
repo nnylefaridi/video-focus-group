@@ -484,7 +484,7 @@ describe("spending caps for reviews on their own key", () => {
     await expect(start(userId, "own_key")).rejects.toThrow(/daily limit/);
   });
 
-  it("tags server-key calls with how their review is paid, and keeps the app's caps on them only", async () => {
+  it("tags server-key calls with how their review is paid, and keeps the app's caps only on spend nobody prepaid", async () => {
     const user = await giveCredit(signIn());
     const creditsReview = reviews.newReviewId();
     await reviews.createReview({ id: creditsReview, answers: [], intent: {}, board, title: "t", userId: user, paidWith: "credits" });
@@ -493,22 +493,29 @@ describe("spending caps for reviews on their own key", () => {
     const callOnCredit = () => credits.onReservation(reservation, () => call(creditsReview));
     await callOnCredit();
     expect((await db.q<{ p: string }>("SELECT paid_with::text AS p FROM app.spend WHERE review_id = $1", [creditsReview]))[0].p).toBe("credits");
+    // A review on the server's key that nobody prepaid (one from before hosted mode).
+    const unpaid = reviews.newReviewId();
+    await reviews.createReview({ id: unpaid, answers: [], intent: {}, board, title: "t", userId: user, paidWith: null });
 
     const own = await ownKeyReview("stillgoing");
     await budget.recordSpend({ label: "test-global-cap", model: ai.MODELS.fast, usd: 1000, paidWith: null });
     try {
-      // The server's key is out of budget...
-      await expect(answerCheckOnCredits()).rejects.toBeInstanceOf(ai.BudgetExceeded);
-      await expect(callOnCredit()).rejects.toBeInstanceOf(ai.BudgetExceeded);
-      await expect(start(await giveCredit(signIn()), "credits")).rejects.toThrow(/budget/);
-      await expect(budget.spendFollowup(who(user), creditsReview)).rejects.toThrow(/budget/);
-      // ...but reviews and follow-ups on someone's own key don't use it, and set no credit aside.
+      // The server's key is out of budget for spend nobody prepaid...
+      await expect(call(unpaid)).rejects.toBeInstanceOf(ai.BudgetExceeded);
+      // ...but calls, reviews and follow-ups paid with credits were paid for up front,
+      await expect(answerCheckOnCredits()).resolves.toBeDefined();
+      await expect(callOnCredit()).resolves.toEqual({ ok: true });
+      await expect(start(await giveCredit(signIn()), "credits")).resolves.toBeUndefined();
+      await expect(budget.spendFollowup(who(user), creditsReview)).resolves.toEqual(expect.any(Number));
+      // ...and ones on someone's own key don't use it, and set no credit aside.
       await expect(call(own.id)).resolves.toEqual({ ok: true });
       await expect(start(signIn(), "own_key")).resolves.toBeUndefined();
       await expect(budget.spendFollowup(who(own.userId), own.id)).resolves.toBeNull();
     } finally {
       await db.q("DELETE FROM app.spend WHERE label = 'test-global-cap'");
     }
+    // Credit spend is kept apart from what the caps count.
+    expect(await budget.creditSpendThisMonth()).toBeGreaterThan(0);
   });
 });
 

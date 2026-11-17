@@ -5,7 +5,7 @@ import { connection } from "next/server";
 import { listReviewsFor } from "@/server/reviews";
 import { getProfile } from "@/experts/load";
 import { STAGE_LABELS } from "@/core/review";
-import { ownKeySpendThisMonth, spendSummary, usageFor } from "@/server/budget";
+import { creditSpendThisMonth, ownKeySpendThisMonth, spendSummary, usageFor } from "@/server/budget";
 import { authReady, claimForViewer, getViewer } from "@/server/auth";
 import { whoIsCalling } from "@/server/client";
 import { isHosted } from "@/server/config";
@@ -37,6 +37,7 @@ async function Usage({ email, userId }: { email: string | null; userId: string |
   // Your own computer (local mode) or your own email: show what the app has spent.
   const owner = !authReady || isOwner(email) ? await spendSummary() : null;
   const ownKeys = owner && isHosted() ? await ownKeySpendThisMonth() : 0;
+  const onCredits = owner && isHosted() ? await creditSpendThisMonth() : 0;
   const m = (n: number) => `$${n.toFixed(2)}`;
   return (
     <section aria-labelledby="usage" className="cutout mt-6 space-y-4 p-5">
@@ -50,6 +51,7 @@ async function Usage({ email, userId }: { email: string | null; userId: string |
         <p className="border-t border-line pt-3 text-sm font-semibold text-ink-soft">
           App API spend: {m(owner.today)} of {m(owner.dailyLimit)} today · {m(owner.month)} of {m(owner.monthlyLimit)} this month
           {ownKeys > 0 && <> · plus {m(ownKeys)} this month on people&apos;s own keys, which doesn&apos;t count toward these</>}
+          {onCredits > 0 && <> · plus {m(onCredits)} this month paid with prepaid credits, which doesn&apos;t count toward these either</>}
         </p>
       )}
     </section>

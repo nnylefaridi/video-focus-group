@@ -9,6 +9,7 @@ import { accountKey, KEY_FORBIDDEN, KEY_REJECTED, KEY_REMOVED, markKeyRejected, 
 import { isHosted } from "@/server/config";
 import type { PaymentMethod } from "@/server/billing";
 import sharp from "sharp";
+import { creditsPaused, OWNER_KEY_DOWN, ownerKeyFailed, ownerKeyWorked } from "@/server/ownerkey";
 import { assertCreditsFor, chargeCall, currentReservation, holdForCall, NotEnoughCredits, releaseHold, ReservationUsed, usdToMicros, type Hold } from "@/server/credits";
 
 export const MODELS = {
@@ -27,6 +28,8 @@ const PRICES: Record<ModelId, [number, number, number]> = {
 
 export class AiUnavailable extends Error {}
 export class BudgetExceeded extends Error {}
+/** Hosted mode: Anthropic refused the app's own key (401, or out of credit). Not the customer's doing, so nothing is charged. */
+export class OwnerKeyUnavailable extends AiUnavailable {}
 
 let serverClient: Anthropic | null = null;
 function serverAnthropic(): Anthropic {
@@ -103,6 +106,13 @@ async function accountProblem(e: unknown, ownKeyOf: string | null): Promise<Erro
     if (e.status === 400 && /credit balance|billing/i.test(e.message))
       return new AiUnavailable("Your Anthropic account is out of credits. Add some under Settings → Billing in the Anthropic Console, then run the review again.");
     return e;
+  }
+  // Hosted mode: the app's own key. The customer can't fix this, so they're told plainly
+  // that nothing was charged; the owner gets an alert and credits pause (ownerkey.ts).
+  const outOfCredit = e.status === 400 && /credit balance|billing/i.test(e.message);
+  if (isHosted() && (e.status === 401 || outOfCredit)) {
+    ownerKeyFailed(e.status === 401 ? "Anthropic rejected it (401)" : "its Anthropic account is out of credit (400 credit balance too low)");
+    return new OwnerKeyUnavailable(OWNER_KEY_DOWN);
   }
   if (e.status === 401) return new AiUnavailable("Anthropic rejected the API key in .env.local. Run npm run setup to enter a working key, then restart Video Focus Group.");
   if (e.status === 403) return new AiUnavailable("This Anthropic API key isn't allowed to use the models Video Focus Group needs. Check the key's workspace in the Anthropic Console.");
@@ -204,11 +214,13 @@ type CallOpts<S extends z.ZodType> = {
 
 /**
  * Checked before every paid call: the app-wide daily/monthly caps (which protect the
- * server's key, so they're skipped for calls on the owner's own key), then this
- * review's own cap, which applies to every review.
+ * server's key from spend nobody prepaid, so they're skipped for calls on the account's
+ * own key and for calls paid with credits), then this review's own cap, which applies to
+ * every review. Calls on credits also stop while credits are paused (ownerkey.ts).
  */
 async function checkBudget(reviewId: string | null, caller: Caller) {
-  if (!caller.ownKeyOf) {
+  if (caller.paidWith === "credits" && creditsPaused()) throw new OwnerKeyUnavailable(OWNER_KEY_DOWN);
+  if (!caller.ownKeyOf && caller.paidWith !== "credits") {
     try {
       await assertWithinSpendLimits();
     } catch (e) {
@@ -249,6 +261,7 @@ export async function callStructured<S extends z.ZodType>(opts: CallOpts<S>): Pr
     msg = await stream.finalMessage().catch(async (e) => {
       throw await accountProblem(e, ownKeyOf);
     });
+    if (!ownKeyOf) ownerKeyWorked();
     usd = priceOf(opts.model, msg.usage);
     await recordSpend({ label: opts.label, model: opts.model, usd, reviewId: opts.reviewId, paidWith });
     if (caller.chargeTo) await chargeCall(caller.chargeTo, usdToMicros(usd), opts.label);
@@ -307,6 +320,7 @@ export async function* streamText(opts: Omit<CallOpts<z.ZodType>, "schema"> & { 
       throw await accountProblem(e, ownKeyOf);
     }
     msg = await stream.finalMessage();
+    if (!ownKeyOf) ownerKeyWorked();
     await record(msg);
     yield { type: "final" as const, message: msg };
   } finally {
