@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { run, mapLimit } from "./exec";
@@ -102,12 +103,27 @@ type WhisperSegment = { offsets: { from: number; to: number }; text: string; tok
 
 const NON_SPEECH = /^\s*[[(*♪].*[\])*♪]?\s*$/;
 
+/** whisper.cpp's CLI is `whisper-cli`. Some installs still name that program `whisper-cpp`. */
+function whisperCommand(): string {
+  const fromEnv = process.env.WHISPER_BIN?.trim();
+  if (fromEnv) return fromEnv;
+  for (const name of ["whisper-cli", "whisper-cpp"]) {
+    try {
+      execFileSync("/bin/sh", ["-c", 'command -v "$1"', "sh", name], { stdio: "ignore" });
+      return name;
+    } catch {
+      // Try the next name. The call below reports a missing program in the usual way.
+    }
+  }
+  return "whisper-cli";
+}
+
 export async function transcribe(dir: string): Promise<TranscriptSegment[]> {
   const wav = path.join(dir, "audio.wav");
   if (!fs.existsSync(wav)) return [];
   if (!fs.existsSync(WHISPER_MODEL)) throw new Error(`Whisper model not found at ${WHISPER_MODEL}`);
   const base = path.join(dir, "transcript");
-  await run("whisper-cli", ["-m", WHISPER_MODEL, "-f", wav, "-ojf", "-of", base, "-np", "-l", "en"]);
+  await run(whisperCommand(), ["-m", WHISPER_MODEL, "-f", wav, "-ojf", "-of", base, "-np", "-l", "en"]);
   const data = JSON.parse(fs.readFileSync(`${base}.json`, "utf8")) as { transcription: WhisperSegment[] };
 
   const segments: TranscriptSegment[] = [];
