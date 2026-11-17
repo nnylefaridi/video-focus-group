@@ -10,11 +10,6 @@ import { authReady, claimForViewer, getViewer } from "@/server/auth";
 import { whoIsCalling } from "@/server/client";
 import { isHosted } from "@/server/config";
 import { SignOut } from "@/components/account/SignOut";
-import { ApiKeyPanel } from "@/components/account/ApiKeyPanel";
-import { getPaymentContext } from "@/server/billing";
-import { API_KEY_ANCHOR } from "@/core/ownkey";
-import { CreditsPanel } from "@/components/account/CreditsPanel";
-import { CREDITS_ANCHOR } from "@/core/credits";
 
 const isOwner = (email: string | null) =>
   Boolean(email && (process.env.OWNER_EMAILS ?? "").split(",").map((e) => e.trim().toLowerCase()).includes(email.toLowerCase()));
@@ -57,40 +52,6 @@ async function Usage({ email, userId }: { email: string | null; userId: string |
           {ownKeys > 0 && <> · plus {m(ownKeys)} this month on people&apos;s own keys, which doesn&apos;t count toward these</>}
         </p>
       )}
-    </section>
-  );
-}
-
-/** Hosted mode: the account's own Anthropic API key, when it pays with one or has one saved. */
-async function OwnKey({ userId }: { userId: string }) {
-  const payment = await getPaymentContext(userId);
-  if (payment.method !== "own_key" && !payment.key) return null;
-  return (
-    <section id={API_KEY_ANCHOR} aria-labelledby="own-key" className="cutout mt-6 scroll-mt-6 space-y-3 p-5">
-      <h2 id="own-key" className="font-display text-lg font-extrabold text-ink">
-        Your Anthropic API key
-      </h2>
-      <p className="text-sm text-ink-soft">
-        {payment.method === "own_key"
-          ? "Your reviews and follow-up questions run on this key, billed by Anthropic. Video Focus Group charges nothing for them."
-          : "Saved for when you pay with your own key. Your reviews use prepaid credits right now."}
-      </p>
-      <ApiKeyPanel initial={payment.key} />
-    </section>
-  );
-}
-
-/** Hosted mode: the account's prepaid credits, when it pays with them or has any. */
-async function Credits({ userId }: { userId: string }) {
-  const payment = await getPaymentContext(userId);
-  if (payment.method !== "credits" && payment.credits.balance === 0) return null;
-  return (
-    <section id={CREDITS_ANCHOR} aria-labelledby="credits-heading" className="cutout mt-6 scroll-mt-6 space-y-3 p-5">
-      <h2 id="credits-heading" className="font-display text-lg font-extrabold text-ink">
-        Your credits
-      </h2>
-      {payment.method !== "credits" && <p className="text-sm text-ink-soft">Your reviews use your own Anthropic API key right now, so these aren&apos;t being spent.</p>}
-      <CreditsPanel initial={payment} from="reviews" />
     </section>
   );
 }
@@ -178,10 +139,16 @@ async function Account() {
     <>
       <p className="mt-2 text-sm text-ink-soft">
         {viewer.email ? <>Signed in as {viewer.email} · </> : null}
+        {isHosted() && (
+          <>
+            <Link href="/account" className="font-semibold underline decoration-line-strong underline-offset-4 hover:text-ink">
+              Your account
+            </Link>
+            {" · "}
+          </>
+        )}
         <SignOut />
       </p>
-      {isHosted() && <Credits userId={viewer.userId} />}
-      {isHosted() && <OwnKey userId={viewer.userId} />}
       <Usage email={viewer.email} userId={viewer.userId} />
       <List userId={viewer.userId} />
     </>

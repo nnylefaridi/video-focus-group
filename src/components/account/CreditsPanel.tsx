@@ -5,6 +5,7 @@ import type { PaymentContext } from "@/server/billing";
 import { CREDIT_PACKS, formatMicros, MICROS_PER_CENT, NO_CASH_REFUND, ON_HOLD, type CreditPackId } from "@/core/credits";
 import { Spinner } from "../Icons";
 import { LoginHint } from "../flow/LoginHint";
+import { LegalLinks } from "./LegalLinks";
 
 const POLL_MS = 2000;
 const POLL_TRIES = 20;
@@ -24,7 +25,7 @@ function clearReturnParams() {
  * After paying, Stripe sends people back here; the credit arrives by Stripe's webhook,
  * so this checks until it's there (or says it's still on its way).
  */
-export function CreditsPanel({ initial, from, onChange }: { initial: PaymentContext; from: "flow" | "reviews"; onChange?: (payment: PaymentContext) => void }) {
+export function CreditsPanel({ initial, from, onChange }: { initial: PaymentContext; from: "flow" | "account"; onChange?: (payment: PaymentContext) => void }) {
   const [payment, setPayment] = useState(initial);
   const [busy, setBusy] = useState<CreditPackId | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -123,6 +124,7 @@ export function CreditsPanel({ initial, from, onChange }: { initial: PaymentCont
         You pay what Anthropic charges us for your review plus 20%. A review sets aside up to {formatMicros(c.reviewReserve)} while it runs and gives back what it
         doesn&apos;t use. {NO_CASH_REFUND} Payments go through Stripe.
       </p>
+      <LegalLinks className="mt-1.5" />
 
       {notice && (
         <p role="status" className={`mt-3 rounded-xl px-4 py-3 text-sm ${notice.tone === "warn" ? "bg-warn-soft text-warn" : "bg-accent-soft text-ink"}`}>

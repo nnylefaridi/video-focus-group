@@ -5,6 +5,7 @@ import { useState } from "react";
 import { supabaseBrowser } from "@/lib/supabase-browser";
 import { authReady, safeNext } from "@/lib/supabase";
 import { ArrowLeft, Spinner } from "../Icons";
+import { LegalLinks } from "./LegalLinks";
 
 type Mode = "login" | "signup";
 
@@ -180,7 +181,9 @@ export function LoginForm() {
         </p>
       )}
 
-      <div className="mt-6 flex flex-wrap items-center justify-between gap-3 text-sm font-semibold text-ink-soft">
+      <LegalLinks className="mt-6" />
+
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-sm font-semibold text-ink-soft">
         <button
           onClick={() => {
             reset();

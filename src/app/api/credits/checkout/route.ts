@@ -7,7 +7,7 @@ import { CREDIT_PACKS } from "@/core/credits";
 
 const Body = z.object({
   pack: z.enum(CREDIT_PACKS.map((p) => p.id) as [string, ...string[]]),
-  from: z.enum(["flow", "reviews"]).default("reviews"),
+  from: z.enum(["flow", "account"]).default("account"),
 });
 
 /**

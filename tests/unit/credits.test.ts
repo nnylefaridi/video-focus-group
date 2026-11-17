@@ -311,7 +311,8 @@ describe("buying credits", () => {
 
     await checkoutRoute.POST(req("/api/credits/checkout", "POST", { pack: "usd50" }));
     const second = stripeApi.sessions[1] as { success_url: string; line_items: { price_data: { unit_amount: number } }[] };
-    expect(second.success_url).toMatch(/^https:\/\/panel\.example\.com\/reviews\?topup=done/);
+    expect(second.success_url).toBe("https://panel.example.com/account/topup/done?session_id={CHECKOUT_SESSION_ID}");
+    expect((stripeApi.sessions[1] as { cancel_url: string }).cancel_url).toBe("https://panel.example.com/account/topup/cancelled");
     expect(second.line_items[0].price_data.unit_amount).toBe(5000);
     // Nothing is credited just for starting a checkout.
     expect((await summary(user)).balance).toBe(0);

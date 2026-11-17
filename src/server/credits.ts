@@ -9,7 +9,10 @@ import {
   needsCreditsMessage,
   ON_HOLD,
   RESERVATION_USED,
+  describeEntry,
   type CreditSummary,
+  type HistoryEntry,
+  type OpenReservation,
 } from "@/core/credits";
 
 /**
@@ -383,6 +386,42 @@ export async function clawBack(t: Query, p: { paymentIntent: string; totalCents:
 export async function assertCanTopUp(userId: string): Promise<void> {
   const s = await creditSummary(userId);
   if (s.onHold) throw new NotEnoughCredits(ON_HOLD);
+}
+
+/**
+ * The account's own credit history, newest first: top-ups, what each review or follow-up
+ * was charged, credit given back, and adjustments (a refund or dispute taking credit
+ * back). Setting credit aside isn't listed; it shows as an open reservation instead.
+ * Always scoped to the one account.
+ */
+export async function creditHistory(userId: string, limit = 50): Promise<HistoryEntry[]> {
+  const rows = await q<{ id: string; kind: HistoryEntry["kind"]; amount: string; at: string; review_id: string | null; note: string | null; title: string | null }>(
+    `SELECT l.id, l.kind::text AS kind, l.amount, l.at, l.review_id, l.note, r.title
+       FROM app.credit_ledger l LEFT JOIN app.reviews r ON r.id = l.review_id AND r.user_id = l.user_id
+      WHERE l.user_id = $1 AND l.kind <> 'reserve'
+      ORDER BY l.id DESC LIMIT $2`,
+    [userId, limit],
+  );
+  return rows.map((r) => ({
+    id: Number(r.id),
+    kind: r.kind,
+    amount: Number(r.amount),
+    at: Number(r.at),
+    reviewId: r.review_id,
+    reviewTitle: r.title,
+    detail: describeEntry(r.kind, r.note),
+  }));
+}
+
+/** Credit set aside right now for reviews and follow-up answers still running. */
+export async function openReservations(userId: string): Promise<OpenReservation[]> {
+  const rows = await q<{ id: string; review_id: string; purpose: Purpose; amount: string; created_at: string; title: string | null }>(
+    `SELECT c.id, c.review_id, c.purpose, c.amount, c.created_at, r.title
+       FROM app.credit_reservations c LEFT JOIN app.reviews r ON r.id = c.review_id AND r.user_id = c.user_id
+      WHERE c.user_id = $1 AND c.status = 'open' ORDER BY c.id DESC`,
+    [userId],
+  );
+  return rows.map((r) => ({ id: Number(r.id), reviewId: r.review_id, reviewTitle: r.title, purpose: r.purpose, amount: Number(r.amount), at: Number(r.created_at) }));
 }
 
 /** Whether this Checkout Session has been credited to this account yet. */

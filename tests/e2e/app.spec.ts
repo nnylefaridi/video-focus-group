@@ -27,6 +27,18 @@ test("the Buy me a coffee tag is on every screen after the first", async ({ page
   await expect(page.getByRole("link", { name: "Buy me a coffee" })).toHaveAttribute("href", "https://buymeacoffee.com/nylefaridi");
 });
 
+test("privacy and terms are plain pages, and local mode has no account page", async ({ page }) => {
+  for (const [path, heading] of [["/privacy", "Privacy"], ["/terms", "Terms"]]) {
+    await page.goto(path);
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText(heading);
+    await expect(page.locator("main")).toContainText("Video Focus Group");
+  }
+  // No accounts on your own computer: /account goes to the reviews list.
+  await page.goto("/account");
+  await expect(page).toHaveURL(/\/reviews$/);
+  await expect(page.getByRole("link", { name: "Your account" })).toHaveCount(0);
+});
+
 test("suggestions appear only once the answer box is clicked", async ({ page, isMobile }) => {
   await page.goto("/");
   await expect(page.getByRole("button", { name: "A comedy skit for TikTok" })).toHaveCount(0);

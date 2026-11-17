@@ -4,6 +4,7 @@ import Link from "next/link";
 import type { ExpertCard } from "@/core/expert";
 import { Avatar } from "../Avatar";
 import { ArrowLeft } from "../Icons";
+import { LegalLinks } from "../account/LegalLinks";
 
 /** Hosted mode, signed out: in place of the upload step. Logging in brings them back here with everything kept. */
 export function SignInStep({ board, onBack, onLeave }: { board: ExpertCard[]; onBack: () => void; onLeave: () => void }) {
@@ -23,6 +24,7 @@ export function SignInStep({ board, onBack, onLeave }: { board: ExpertCard[]; on
       >
         Log in or sign up
       </Link>
+      <LegalLinks className="mt-4" />
 
       {board.length > 0 && (
         <div className="mt-10 flex items-center gap-3">

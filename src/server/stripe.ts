@@ -2,7 +2,7 @@ import Stripe from "stripe";
 import { tx, type Query } from "./db";
 import { hostedOrigin } from "./config";
 import { assertCanTopUp, clawBack, creditTopup } from "./credits";
-import { formatMicros, MICROS_PER_CENT, packById, type CreditPackId } from "@/core/credits";
+import { formatMicros, MICROS_PER_CENT, packById, TOPUP_CANCELLED_PATH, TOPUP_DONE_PATH, type CreditPackId } from "@/core/credits";
 
 /**
  * Hosted mode: buying credits with Stripe Checkout, and Stripe's webhooks telling Panel
@@ -28,7 +28,7 @@ function webhookSecret(): string {
 }
 
 /** Where Checkout sends people back to: the upload step they came from, or Your reviews. */
-export type ReturnTo = "flow" | "reviews";
+export type ReturnTo = "flow" | "account";
 
 /**
  * Starts a Stripe Checkout for one of the fixed packs and returns its URL. The price
@@ -40,7 +40,7 @@ export async function createTopupCheckout(userId: string, packId: CreditPackId, 
   if (!pack) throw new Error(`Unknown credit pack ${packId}`);
   await assertCanTopUp(userId);
   const stripe = stripeClient();
-  const back = `${hostedOrigin()}${returnTo === "flow" ? "/" : "/reviews"}`;
+  const origin = hostedOrigin();
   const metadata = { user_id: userId, pack: pack.id };
   const session = await stripe.checkout.sessions.create({
     mode: "payment",
@@ -60,8 +60,8 @@ export async function createTopupCheckout(userId: string, packId: CreditPackId, 
     client_reference_id: userId,
     metadata,
     payment_intent_data: { metadata },
-    success_url: `${back}?topup=done&session_id={CHECKOUT_SESSION_ID}`,
-    cancel_url: `${back}?topup=cancelled`,
+    success_url: returnTo === "flow" ? `${origin}/?topup=done&session_id={CHECKOUT_SESSION_ID}` : `${origin}${TOPUP_DONE_PATH}?session_id={CHECKOUT_SESSION_ID}`,
+    cancel_url: returnTo === "flow" ? `${origin}/?topup=cancelled` : `${origin}${TOPUP_CANCELLED_PATH}`,
   });
   if (!session.url) throw new Error("Stripe didn't return a checkout page for this payment.");
   return session.url;

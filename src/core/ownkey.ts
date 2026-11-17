@@ -11,7 +11,7 @@ export const KEY_FORBIDDEN = "Your Anthropic API key isn't allowed to use the mo
 
 /** The key section on the Your reviews page. */
 export const API_KEY_ANCHOR = "api-key";
-export const API_KEY_HREF = `/reviews#${API_KEY_ANCHOR}`;
+export const API_KEY_HREF = `/account#${API_KEY_ANCHOR}`;
 
 /** Whether this error is fixed by saving or replacing the key in Panel. */
 export function isKeyProblem(message: string | null | undefined): boolean {

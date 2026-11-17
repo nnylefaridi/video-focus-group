@@ -56,9 +56,45 @@ export function followupNeedsCreditsMessage(s: Pick<CreditSummary, "available" |
 export const RESERVATION_USED =
   "This used up the credit set aside for it, so it stopped before spending more. You're only charged for what it used.";
 
-/** The credits section on the Your reviews page. */
+/** The credits section on the account page. */
 export const CREDITS_ANCHOR = "credits";
-export const CREDITS_HREF = `/reviews#${CREDITS_ANCHOR}`;
+export const CREDITS_HREF = `/account#${CREDITS_ANCHOR}`;
+
+/** One line of an account's credit history, as the account page shows it. */
+export type HistoryEntry = {
+  id: number;
+  kind: "topup" | "charge" | "release" | "adjustment";
+  /** Signed micro-dollars: + for credit added or given back, - for credit used or taken back. */
+  amount: number;
+  at: number;
+  reviewId: string | null;
+  reviewTitle: string | null;
+  detail: string;
+};
+
+/** Credit set aside for something still running. */
+export type OpenReservation = { id: number; reviewId: string; reviewTitle: string | null; purpose: "review" | "followup"; amount: number; at: number };
+
+/** Plain words for a ledger line. The ledger's own note only says why (a pack, a refund, a review or a follow-up). */
+export function describeEntry(kind: string, note: string | null): string {
+  const followup = note === "followup";
+  switch (kind) {
+    case "topup":
+      return "Credits added";
+    case "charge":
+      return followup ? "Follow-up answers" : "Review";
+    case "release":
+      return followup ? "Unused credit from a follow-up, given back" : "Unused credit from a review, given back";
+    case "adjustment":
+      return note === "dispute" ? "Credit taken back after a payment dispute" : "Credit taken back after a refund";
+    default:
+      return "Adjustment";
+  }
+}
+
+/** Where Stripe sends people after Checkout. */
+export const TOPUP_DONE_PATH = "/account/topup/done";
+export const TOPUP_CANCELLED_PATH = "/account/topup/cancelled";
 
 /** Whether this error is fixed by adding credits. */
 export function isCreditsProblem(message: string | null | undefined): boolean {

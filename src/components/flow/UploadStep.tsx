@@ -70,7 +70,7 @@ export function UploadStep({
     const res = await fetch("/api/reviews", { method: "POST", body: JSON.stringify({ answers, board: board.map((b) => b.id) }) }).catch(() => null);
     if (!res) {
       setProgress(null);
-      return setError("Couldn't reach Panel. Check it's still running in Terminal, then try again.");
+      return setError("Couldn't reach Video Focus Group. Check it's still running in Terminal, then try again.");
     }
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {

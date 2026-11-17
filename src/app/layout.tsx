@@ -10,7 +10,7 @@ const nunito = Nunito({
 });
 
 export const metadata: Metadata = {
-  title: "Panel",
+  title: "Video Focus Group",
   description: "Show your short video to a paper board of the people who wrote the book on it.",
 };
 
