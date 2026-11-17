@@ -14,11 +14,21 @@ Panel is a local app for people who make short videos. You answer a few question
 - **An Anthropic API key with billing turned on.** You pay Anthropic directly. Create the key at [console.anthropic.com](https://console.anthropic.com) under **Settings → API Keys**.
 - About **1 GB** of free disk. The speech model is about 148 MB.
 
-**What a review costs.** Panel refuses to start a review when less than **$1.50** is left in today's or this month's budget (`typicalReviewUsd` in `src/server/config.ts`). One review, including its follow-up questions, stops spending at **$3** (`REVIEW_COST_CAP_USD`). The whole app stops at **$10** a day and **$40** a month (`DAILY_LIMIT_USD`, `MONTHLY_LIMIT_USD`). Those are defaults you can change. Panel counts each call with the prices in `src/ai/client.ts`: Haiku for the opening questions, Sonnet for frame descriptions, Opus for each reviewer. The opening questions use the cheap model. What Anthropic charges for a review depends on the video. In the Anthropic Console, open **Settings → Limits** and set a hard monthly spend limit on the key. Anthropic enforces that even if something on your computer goes wrong.
+**What a review costs.** In our own testing, across 8 finished reviews, a review cost $0.92 on average and $1.27 at most. Panel refuses to start one when less than **$1.50** is left today or this month (`typicalReviewUsd`), stops that review and its follow-ups at **$3** (`REVIEW_COST_CAP_USD`), and stops the app at **$10** a day and **$40** a month (`DAILY_LIMIT_USD`, `MONTHLY_LIMIT_USD`). Those are defaults. Calls are priced in `src/ai/client.ts`: Haiku for the opening questions, Sonnet for frames, Opus for each reviewer. What you pay still depends on the video. In the Anthropic Console, open **Settings → Limits** and set a hard monthly spend limit on the key. Anthropic enforces that even if something on your computer goes wrong.
 
-These instructions were run on **Ubuntu 24.04**. The macOS steps are the Homebrew commands `npm run setup` prints on a Mac; they were not re-run here. Windows was not tested.
+Panel runs on macOS and Ubuntu 24.04. Windows isn't supported yet.
 
 ## Set it up (once)
+
+### macOS
+
+Install [Homebrew](https://brew.sh), then:
+
+```bash
+brew install node ffmpeg whisper-cpp
+```
+
+Check `node -v` (20.9 or newer), `ffmpeg -version`, `ffprobe -version`, and `whisper-cli -h`. The Homebrew formula is named `whisper-cpp`. The program is named `whisper-cli`. An older whisper.cpp program named `main` is retired and will not transcribe.
 
 ### Ubuntu 24.04
 
@@ -41,7 +51,7 @@ Open a terminal in the folder where you want Panel, and run these one at a time.
    node -v && npm -v
    ```
 
-   `node -v` should print v22. On arm64, `npm run setup` prints the same steps with `linux-arm64` in the filename. The tarball checked here was the x86_64 build.
+   `node -v` should print v22. These commands are for x86_64. On arm64, `npm run setup` prints the same steps with `linux-arm64` in the filename.
 
 3. **whisper.cpp** v1.9.5. Ubuntu 24.04 does not package it. The program Panel runs is `whisper-cli`.
 
@@ -56,36 +66,26 @@ Open a terminal in the folder where you want Panel, and run these one at a time.
    cd ..
    ```
 
-   `cmake` is pointed at `gcc` and `g++` on purpose. `-j 2` is the build that was run; a higher job count can use a lot of memory. If `whisper-cli` says it cannot find `libwhisper.so.1`, run `sudo ldconfig` again.
-
-### macOS
-
-Install [Homebrew](https://brew.sh), then:
-
-```bash
-brew install node ffmpeg whisper-cpp
-```
-
-Check `node -v` (20.9 or newer), `ffmpeg -version`, `ffprobe -version`, and `whisper-cli -h`. The Homebrew formula is named `whisper-cpp`. The program is named `whisper-cli`. An older whisper.cpp program named `main` is retired and will not transcribe.
+   `gcc` and `g++` are set on purpose. `-j 2` keeps the compile from using every core; a higher count can run out of memory. If `whisper-cli` says it cannot find `libwhisper.so.1`, run `sudo ldconfig` again.
 
 ### Then, on either system
 
-4. **Download Panel:**
+1. **Download Panel:**
 
    ```bash
    git clone https://github.com/nnylefaridi/video-focus-group.git
    cd video-focus-group
    ```
 
-5. **Install its packages** (takes a minute or two):
+2. **Install its packages** (takes a minute or two):
 
    ```bash
    npm install
    ```
 
-6. **Get an Anthropic API key.** In [console.anthropic.com](https://console.anthropic.com), add billing under **Settings → Billing**. Then open **Settings → API Keys**, click **Create Key**, name it `Panel`, and copy it (it starts with `sk-ant-`).
+3. **Get an Anthropic API key.** In [console.anthropic.com](https://console.anthropic.com), add billing under **Settings → Billing**. Then open **Settings → API Keys**, click **Create Key**, name it `Panel`, and copy it (it starts with `sk-ant-`).
 
-7. **Run setup:**
+4. **Run setup:**
 
    ```bash
    npm run setup
@@ -134,8 +134,8 @@ npm run setup
 
 | What you see | What to do |
 |---|---|
-| `npm run setup` says Node is too old, or `command not found: npm` | On Ubuntu 24.04, apt's Node is 18. Use the Node.js 22 steps above, then open a new terminal. On a Mac, `brew install node` or `brew upgrade node`. |
-| `npm run setup` says ffmpeg, ffprobe, or whisper-cli is missing | Run the command it prints. On Ubuntu 24.04 that is `sudo apt install -y ffmpeg` for the video tools, and the whisper.cpp build above for `whisper-cli`. On a Mac it is `brew install ffmpeg` or `brew install whisper-cpp`. Then run `npm run setup` again. |
+| `npm run setup` says Node is too old, or `command not found: npm` | On a Mac, `brew install node` or `brew upgrade node`. On Ubuntu 24.04, apt's Node is 18. Use the Node.js 22 steps above, then open a new terminal. |
+| `npm run setup` says ffmpeg, ffprobe, or whisper-cli is missing | Run the command it prints. On a Mac that is `brew install ffmpeg` or `brew install whisper-cpp`. On Ubuntu 24.04 that is `sudo apt install -y ffmpeg` for the video tools, and the whisper.cpp build above for `whisper-cli`. Then run `npm run setup` again. |
 | `whisper-cli: error while loading shared libraries: libwhisper.so.1` | Run `sudo ldconfig`, then `whisper-cli -h`. |
 | `Couldn't download the speech-to-text model` | Setup downloads it from huggingface.co into `data/models/ggml-base.en.bin` (about 148 MB). Check your connection and run `npm run setup` again. A partial download is deleted and started over. |
 | "Anthropic rejected that key" | Copy the whole key again (it starts with `sk-ant-`) and check billing is set up under **Settings → Billing**. Setup does not print the key. |
