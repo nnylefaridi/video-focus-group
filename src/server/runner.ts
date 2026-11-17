@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import { AiUnavailable, BudgetExceeded, checkReviewKey } from "@/ai/client";
 import { isHosted } from "./config";
 import { NotEnoughCredits, settleStaleFollowups } from "./credits";
+import { failHangingQuestions } from "./followups";
 import { verifyUpload } from "./intake";
 import { claimNext, finishJob, heartbeat, releaseJobs, retryJob, type Job } from "./jobs";
 import { runReview } from "./process";
@@ -82,6 +83,8 @@ async function defaultMaintain() {
   if (n) console.log(`[runner] removed ${n} abandoned upload(s)`);
   const f = await settleStaleFollowups().catch((e) => (console.error("[runner] settling old follow-up credit failed:", e), 0));
   if (f) console.log(`[runner] settled ${f} follow-up answer(s) that never finished`);
+  const h = await failHangingQuestions().catch((e) => (console.error("[runner] marking unanswered follow-up questions failed:", e), 0));
+  if (h) console.log(`[runner] marked ${h} follow-up question(s) left unanswered by a stopped server as failed`);
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));

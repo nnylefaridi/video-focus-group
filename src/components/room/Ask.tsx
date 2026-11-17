@@ -9,7 +9,8 @@ import { formatTime } from "@/core/evidence";
 import { isCreditsProblem } from "@/core/credits";
 import { AddCreditsLink } from "./BoardView";
 
-type Msg = { role: "user" | "assistant"; text: string };
+/** A question's state: "failed" when its answer never came (an error, or the server restarted mid-answer). */
+type Msg = { role: "user" | "assistant"; text: string; state?: "answering" | "failed" };
 
 /** Follow-up conversation with one reviewer. Answers stream in; the reviewer can take a closer look at a moment. */
 export function Ask({ initialWho }: { initialWho?: string | null }) {
@@ -28,7 +29,7 @@ export function Ask({ initialWho }: { initialWho?: string | null }) {
     if (!who || threads[who]) return;
     fetch(`/api/reviews/${view.id}/chat?reviewer=${encodeURIComponent(who)}`)
       .then((r) => r.json())
-      .then((d: { messages: { role: Msg["role"]; text: string }[] }) => setThreads((t) => ({ ...t, [who]: d.messages ?? [] })))
+      .then((d: { messages: Msg[] }) => setThreads((t) => ({ ...t, [who]: (d.messages ?? []).map(({ role, text, state }) => ({ role, text, state })) })))
       .catch(() => setThreads((t) => ({ ...t, [who]: [] })));
   }, [who, threads, view.id]);
 
@@ -79,7 +80,13 @@ export function Ask({ initialWho }: { initialWho?: string | null }) {
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Something went wrong.");
-      setThreads((t) => ({ ...t, [who]: (t[who] ?? []).filter((m, i, a) => !(i === a.length - 1 && m.role === "assistant" && !m.text)) }));
+      setThreads((t) => {
+        const list = (t[who] ?? []).filter((m, i, a) => !(i === a.length - 1 && m.role === "assistant" && !m.text));
+        const last = list[list.length - 1];
+        // A partly written answer stays on screen; a question with no answer at all says so.
+        if (last?.role === "user") list[list.length - 1] = { ...last, state: "failed" };
+        return { ...t, [who]: list };
+      });
     } finally {
       setBusy(false);
       setStatus(null);
@@ -115,8 +122,13 @@ export function Ask({ initialWho }: { initialWho?: string | null }) {
         )}
         {msgs.map((m, i) =>
           m.role === "user" ? (
-            <div key={i} className="ml-auto max-w-[85%] rounded-2xl rounded-tr-md bg-paper-deep px-4 py-2.5 text-ink">
-              {m.text}
+            <div key={i} className="ml-auto max-w-[85%]">
+              <div className="rounded-2xl rounded-tr-md bg-paper-deep px-4 py-2.5 text-ink">{m.text}</div>
+              {(m.state === "failed" || (m.state === "answering" && !(busy && i >= msgs.length - 2))) && (
+                <p className="mt-1 text-right text-sm text-ink-soft">
+                  {m.state === "failed" ? "This one didn't get an answer. You can ask again." : "Still answering. Refresh in a moment to see it."}
+                </p>
+              )}
             </div>
           ) : (
             <div key={i} className="flex gap-3">

@@ -6,7 +6,7 @@ import { accessibleReview, mustSignIn, signInResponse } from "@/server/auth";
 import { whoIsCalling } from "@/server/client";
 import { enqueue } from "@/server/jobs";
 import { kickNow } from "@/server/kick";
-import { addMessage, getThread } from "@/server/followups";
+import { addMessage, answeredOnly, getThread, settleQuestion } from "@/server/followups";
 import { getProfile } from "@/experts/load";
 import { followupSystem, INSPECT_TOOL, MODELS, streamText } from "@/ai/followup";
 import { AiUnavailable, BudgetExceeded } from "@/ai/client";
@@ -94,8 +94,9 @@ export async function POST(req: Request, ctx: RouteContext<"/api/reviews/[id]/ch
   }
 
   const ledger = r.ledger;
-  const history = await getThread(id, profile.id);
-  await addMessage(id, profile.id, "user", parsed.data.message);
+  // Questions that never got an answer are left out, so each turn pairs a question with its answer.
+  const history = answeredOnly(await getThread(id, profile.id));
+  const questionId = await addMessage(id, profile.id, "user", parsed.data.message);
 
   const system = followupSystem(profile, r.notes?.[profile.id], r.intent, ledger);
   const messages: Anthropic.Beta.BetaMessageParam[] = [
@@ -108,6 +109,7 @@ export async function POST(req: Request, ctx: RouteContext<"/api/reviews/[id]/ch
   const answer = async (controller: ReadableStreamDefaultController) => {
     const send = (obj: unknown) => controller.enqueue(encoder.encode(`${JSON.stringify(obj)}\n`));
     let full = "";
+    let answered = false;
     try {
       for (let step = 0; step < 4; step++) {
         let final: Anthropic.Beta.BetaMessage | null = null;
@@ -143,6 +145,7 @@ export async function POST(req: Request, ctx: RouteContext<"/api/reviews/[id]/ch
       }
       const cleaned = cleanCitations(full.trim(), ledger, principleIds);
       await addMessage(id, profile.id, "assistant", cleaned);
+      answered = true;
       send({ type: "done", text: cleaned });
     } catch (e) {
       const message =
@@ -150,6 +153,7 @@ export async function POST(req: Request, ctx: RouteContext<"/api/reviews/[id]/ch
       console.error("[chat]", e);
       send({ type: "error", error: message });
     } finally {
+      await settleQuestion(questionId, answered).catch((e) => console.error(`[chat] marking a question on ${id} failed:`, e));
       controller.close();
     }
   };

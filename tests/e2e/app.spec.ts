@@ -72,7 +72,7 @@ test("every reviewer has a profile page with sourced ideas", async ({ page, requ
 
 test("the reviews list and unknown pages render", async ({ page }) => {
   await page.goto("/reviews");
-  await expect(page.getByRole("heading", { name: "Your reviews" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Your reviews", exact: true })).toBeVisible();
   await page.getByRole("link", { name: "New review" }).click();
   await expect(page).toHaveURL("/");
   await page.goto("/r/AAAAAAAAAAAAAAAA");

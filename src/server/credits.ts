@@ -1,5 +1,6 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { q, tx, type Query } from "./db";
+import { ANSWER_STALE_MS } from "./followups";
 import { COST_CAP_USD, FOLLOWUP_COST_CAP_USD } from "./config";
 import {
   formatMicros,
@@ -236,7 +237,7 @@ export async function reservationForRun(userId: string, reviewId: string): Promi
 }
 
 /** Follow-up answers whose request died before settling (a crash, a restart) are settled after this long. */
-export async function settleStaleFollowups(olderThanMs = 60 * 60 * 1000): Promise<number> {
+export async function settleStaleFollowups(olderThanMs = ANSWER_STALE_MS): Promise<number> {
   const rows = await q<{ id: string }>("SELECT id FROM app.credit_reservations WHERE purpose = 'followup' AND status = 'open' AND created_at < $1", [Date.now() - olderThanMs]);
   for (const r of rows) await settleReservation(Number(r.id));
   return rows.length;
