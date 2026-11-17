@@ -7,6 +7,7 @@ import type { Answer } from "@/core/questionnaire/engine";
 import type { IntentFields } from "@/core/intent";
 import type { Ledger } from "@/core/evidence";
 import type { ReviewerNotes, ReviewStage, StoredTurn, Synthesis } from "@/core/review";
+import { isPaymentMethod, type PaymentMethod } from "./billing";
 
 export type VideoMeta = {
   originalName: string;
@@ -40,6 +41,8 @@ export type ReviewRecord = {
   validation: Record<string, { dropped: string[]; fixed: string[] }> | null;
   cost: Cost;
   storedFiles: string[];
+  /** Hosted mode: how the review is paid for, fixed when it starts. Null: the server's own key. */
+  paidWith: PaymentMethod | null;
 };
 
 type Row = Record<string, unknown>;
@@ -69,6 +72,7 @@ function fromRow(r: Row): ReviewRecord {
     validation: json<ReviewRecord["validation"]>(r.validation),
     cost: json<Cost>(r.cost) ?? { usd: 0, calls: [] },
     storedFiles: json<string[]>(r.stored_files) ?? [],
+    paidWith: isPaymentMethod(r.paid_with) ? r.paid_with : null,
   };
 }
 
@@ -83,10 +87,12 @@ export function reviewDir(id: string): string {
 
 export type Owner = { userId: string | null; anonId: string | null };
 
-export const INSERT_REVIEW = `INSERT INTO app.reviews (id, created_at, updated_at, user_id, anon_id, stage, answers, intent, board, title)
-  VALUES ($1, $2, $2, $3, $4, 'uploading', $5::jsonb, $6::jsonb, $7::jsonb, $8)`;
+export const INSERT_REVIEW = `INSERT INTO app.reviews (id, created_at, updated_at, user_id, anon_id, stage, answers, intent, board, title, paid_with)
+  VALUES ($1, $2, $2, $3, $4, 'uploading', $5::jsonb, $6::jsonb, $7::jsonb, $8, $9::text::app.payment_method)`;
 
-export function insertReviewParams(input: { id: string; answers: Answer[]; intent: IntentFields; board: string[]; title: string } & Owner) {
+type NewReview = { id: string; answers: Answer[]; intent: IntentFields; board: string[]; title: string; paidWith?: PaymentMethod | null };
+
+export function insertReviewParams(input: NewReview & Owner) {
   return [
     input.id,
     Date.now(),
@@ -96,11 +102,17 @@ export function insertReviewParams(input: { id: string; answers: Answer[]; inten
     JSON.stringify(input.intent),
     JSON.stringify(input.board),
     input.title,
+    input.paidWith ?? null,
   ];
 }
 
-export async function createReview(input: { id: string; answers: Answer[]; intent: IntentFields; board: string[]; title: string } & Partial<Owner>) {
+export async function createReview(input: NewReview & Partial<Owner>) {
   await q(INSERT_REVIEW, insertReviewParams({ userId: null, anonId: null, ...input }));
+}
+
+/** A retried review runs on however the account pays now. */
+export async function setPaidWith(id: string, method: PaymentMethod | null) {
+  await q("UPDATE app.reviews SET paid_with = $2::text::app.payment_method, updated_at = $3 WHERE id = $1", [id, method, Date.now()]);
 }
 
 export async function getReview(id: string): Promise<ReviewRecord | null> {

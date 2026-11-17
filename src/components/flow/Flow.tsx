@@ -212,6 +212,7 @@ export function Flow({ signInFirst = false, payment = null }: { signInFirst?: bo
               board={boardCards}
               payment={pay}
               onChangePayment={pay ? () => setChoosingPay(true) : undefined}
+              onPaymentChange={pay ? setPay : undefined}
               onBack={() => setStep("board")}
               onDone={() => {
                 try {

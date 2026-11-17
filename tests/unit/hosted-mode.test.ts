@@ -11,6 +11,7 @@ import { pathToFileURL } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
   checkStartup,
+  encryptionSecretOf,
   hostedProblems,
   listenAddress,
   parseEnvFile,
@@ -34,6 +35,7 @@ const HOSTED = {
   DATABASE_URL: "postgres://u:p@db.example.com:5432/postgres",
   HOSTED_PUBLIC_URL: "https://panel.example.com",
   CLIENT_IP_HEADER: "Fly-Client-IP",
+  KEY_ENCRYPTION_SECRET: Buffer.alloc(32, 7).toString("base64"),
 };
 
 const without = (...keys: string[]) => Object.fromEntries(Object.entries(HOSTED).filter(([k]) => !keys.includes(k)));
@@ -98,8 +100,22 @@ describe("what hosted mode needs before it starts", () => {
       "SUPABASE_SECRET_KEY",
       "DATABASE_URL",
       "HOSTED_PUBLIC_URL",
+      "KEY_ENCRYPTION_SECRET",
       "CLIENT_IP_HEADER (or TRUSTED_PROXIES)",
     ]);
+  });
+
+  it("needs KEY_ENCRYPTION_SECRET to be 32 bytes as base64 or hex", () => {
+    expect(hostedProblems(without("KEY_ENCRYPTION_SECRET")).missing).toEqual(["KEY_ENCRYPTION_SECRET"]);
+    expect(encryptionSecretOf(HOSTED.KEY_ENCRYPTION_SECRET)).toHaveLength(32);
+    expect(encryptionSecretOf("ab".repeat(32))).toEqual(Buffer.alloc(32, 0xab));
+    for (const bad of ["secret", "ab".repeat(16), "ab".repeat(33), Buffer.alloc(16).toString("base64"), Buffer.alloc(33).toString("base64"), `${HOSTED.KEY_ENCRYPTION_SECRET.slice(0, -1)}`]) {
+      expect(encryptionSecretOf(bad)).toBeNull();
+      const { missing, invalid } = hostedProblems({ ...HOSTED, KEY_ENCRYPTION_SECRET: bad });
+      expect(missing).toEqual([]);
+      expect(invalid).toEqual(["KEY_ENCRYPTION_SECRET must be 32 random bytes, written as base64 or hex. Make one with: openssl rand -base64 32"]);
+    }
+    expect(() => checkStartup({ ...HOSTED, KEY_ENCRYPTION_SECRET: "secret" })).toThrow(/KEY_ENCRYPTION_SECRET must be 32 random bytes/);
   });
 
   it("puts the missing settings in a plain message", () => {
@@ -204,7 +220,7 @@ describe("starting Panel", () => {
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "panel-start-"));
     return { cwd, ...spawnSync(process.execPath, args, { cwd, env: { PATH: process.env.PATH ?? "", NODE_ENV: "production", ...env }, encoding: "utf8", timeout: 60_000 }) };
   };
-  const missingAll = /These settings are missing:\n {2}- NEXT_PUBLIC_SUPABASE_URL\n {2}- NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY\n {2}- SUPABASE_SECRET_KEY\n {2}- DATABASE_URL\n {2}- HOSTED_PUBLIC_URL\n {2}- CLIENT_IP_HEADER \(or TRUSTED_PROXIES\)/;
+  const missingAll = /These settings are missing:\n {2}- NEXT_PUBLIC_SUPABASE_URL\n {2}- NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY\n {2}- SUPABASE_SECRET_KEY\n {2}- DATABASE_URL\n {2}- HOSTED_PUBLIC_URL\n {2}- KEY_ENCRYPTION_SECRET\n {2}- CLIENT_IP_HEADER \(or TRUSTED_PROXIES\)/;
 
   it("stops the website, naming what's missing", () => {
     const r = run([path.join(ROOT, "server.mjs")], { PANEL_MODE: "hosted" });

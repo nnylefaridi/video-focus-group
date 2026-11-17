@@ -64,12 +64,25 @@ export function publicOriginOf(value) {
   return url.origin;
 }
 
+/**
+ * KEY_ENCRYPTION_SECRET as the 32 bytes it encodes (from `openssl rand -base64 32`, or
+ * 64 hex characters), or null if it isn't exactly that.
+ */
+export function encryptionSecretOf(value) {
+  const v = String(value ?? "").trim();
+  if (/^[0-9a-fA-F]{64}$/.test(v)) return Buffer.from(v, "hex");
+  if (!/^[A-Za-z0-9+/]{43}=$/.test(v)) return null;
+  const bytes = Buffer.from(v, "base64");
+  return bytes.length === 32 && bytes.toString("base64") === v ? bytes : null;
+}
+
 const HOSTED_REQUIRED = [
   "NEXT_PUBLIC_SUPABASE_URL",
   "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
   "SUPABASE_SECRET_KEY",
   "DATABASE_URL",
   "HOSTED_PUBLIC_URL",
+  "KEY_ENCRYPTION_SECRET",
 ];
 
 const set = (v) => Boolean(v && String(v).trim());
@@ -84,6 +97,8 @@ export function hostedProblems(env) {
   if (!set(env.CLIENT_IP_HEADER) && (!proxies || proxies === "0")) missing.push("CLIENT_IP_HEADER (or TRUSTED_PROXIES)");
   if (set(env.HOSTED_PUBLIC_URL) && !publicOriginOf(env.HOSTED_PUBLIC_URL))
     invalid.push(`HOSTED_PUBLIC_URL must be the site's public https address with nothing after it, like https://panel.example.com (it's "${String(env.HOSTED_PUBLIC_URL).trim()}")`);
+  if (set(env.KEY_ENCRYPTION_SECRET) && !encryptionSecretOf(env.KEY_ENCRYPTION_SECRET))
+    invalid.push("KEY_ENCRYPTION_SECRET must be 32 random bytes, written as base64 or hex. Make one with: openssl rand -base64 32");
   if (proxies && !/^\d+$/.test(proxies)) invalid.push(`TRUSTED_PROXIES must be a whole number, the count of proxies in front of Panel (it's "${proxies}")`);
   const port = String(env.PORT ?? "").trim();
   if (port && !(/^\d+$/.test(port) && Number(port) >= 1 && Number(port) <= 65535)) invalid.push(`PORT must be a port number like 3000 (it's "${port}")`);

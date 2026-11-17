@@ -53,6 +53,8 @@ export const SPEND_LIMITS = {
   /** Ceilings for one network (school, office, café) across all its people, signed in or not. */
   maxReviewsPerNetworkPerDay: num(process.env.MAX_REVIEWS_PER_NETWORK_PER_DAY, 40),
   maxAnswerChecksPerNetworkPerHour: num(process.env.MAX_ANSWER_CHECKS_PER_NETWORK_PER_HOUR, 300),
+  /** Hosted mode: tries at saving an Anthropic API key, per account. */
+  maxKeyChecksPerHour: num(process.env.MAX_KEY_CHECKS_PER_HOUR, 10),
   /** Rough cost of one full review, used to refuse starting one that can't finish within budget. */
   typicalReviewUsd: 1.5,
 };

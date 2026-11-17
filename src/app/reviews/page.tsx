@@ -5,11 +5,14 @@ import { connection } from "next/server";
 import { listReviewsFor } from "@/server/reviews";
 import { getProfile } from "@/experts/load";
 import { STAGE_LABELS } from "@/core/review";
-import { spendSummary, usageFor } from "@/server/budget";
+import { ownKeySpendThisMonth, spendSummary, usageFor } from "@/server/budget";
 import { authReady, claimForViewer, getViewer } from "@/server/auth";
 import { whoIsCalling } from "@/server/client";
 import { isHosted } from "@/server/config";
 import { SignOut } from "@/components/account/SignOut";
+import { ApiKeyPanel } from "@/components/account/ApiKeyPanel";
+import { getPaymentContext } from "@/server/billing";
+import { API_KEY_ANCHOR } from "@/core/ownkey";
 
 const isOwner = (email: string | null) =>
   Boolean(email && (process.env.OWNER_EMAILS ?? "").split(",").map((e) => e.trim().toLowerCase()).includes(email.toLowerCase()));
@@ -36,6 +39,7 @@ async function Usage({ email, userId }: { email: string | null; userId: string |
   const u = await usageFor(whoIsCalling(await headers(), userId));
   // Your own computer (local mode) or your own email: show what the app has spent.
   const owner = !authReady || isOwner(email) ? await spendSummary() : null;
+  const ownKeys = owner && isHosted() ? await ownKeySpendThisMonth() : 0;
   const m = (n: number) => `$${n.toFixed(2)}`;
   return (
     <section aria-labelledby="usage" className="cutout mt-6 space-y-4 p-5">
@@ -48,8 +52,28 @@ async function Usage({ email, userId }: { email: string | null; userId: string |
       {owner && (
         <p className="border-t border-line pt-3 text-sm font-semibold text-ink-soft">
           App API spend: {m(owner.today)} of {m(owner.dailyLimit)} today · {m(owner.month)} of {m(owner.monthlyLimit)} this month
+          {ownKeys > 0 && <> · plus {m(ownKeys)} this month on people&apos;s own keys, which doesn&apos;t count toward these</>}
         </p>
       )}
+    </section>
+  );
+}
+
+/** Hosted mode: the account's own Anthropic API key, when it pays with one or has one saved. */
+async function OwnKey({ userId }: { userId: string }) {
+  const payment = await getPaymentContext(userId);
+  if (payment.method !== "own_key" && !payment.key) return null;
+  return (
+    <section id={API_KEY_ANCHOR} aria-labelledby="own-key" className="cutout mt-6 scroll-mt-6 space-y-3 p-5">
+      <h2 id="own-key" className="font-display text-lg font-extrabold text-ink">
+        Your Anthropic API key
+      </h2>
+      <p className="text-sm text-ink-soft">
+        {payment.method === "own_key"
+          ? "Your reviews and follow-up questions run on this key, billed by Anthropic. Panel charges nothing for them."
+          : "Saved for when you pay with your own key. Your reviews use prepaid credits right now."}
+      </p>
+      <ApiKeyPanel initial={payment.key} />
     </section>
   );
 }
@@ -139,6 +163,7 @@ async function Account() {
         {viewer.email ? <>Signed in as {viewer.email} · </> : null}
         <SignOut />
       </p>
+      {isHosted() && <OwnKey userId={viewer.userId} />}
       <Usage email={viewer.email} userId={viewer.userId} />
       <List userId={viewer.userId} />
     </>

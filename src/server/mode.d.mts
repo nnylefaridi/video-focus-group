@@ -7,6 +7,7 @@ export function parseEnvFile(text: string): Record<string, string>;
 export function readEnvFiles(dir?: string, nodeEnv?: string): Record<string, string>;
 export function startupEnv(dir?: string, nodeEnv?: string): Env;
 export function publicOriginOf(value: string | undefined): string | null;
+export function encryptionSecretOf(value: string | undefined): Buffer | null;
 export function hostedProblems(env: Env): { missing: string[]; invalid: string[] };
 export function checkStartup(env: Env): { mode: Mode };
 export function exitUnlessReady(env: Env): Mode;

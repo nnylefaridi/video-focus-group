@@ -1,4 +1,4 @@
-import { updateReview } from "@/server/reviews";
+import { setPaidWith, updateReview } from "@/server/reviews";
 import { enqueue } from "@/server/jobs";
 import { accessibleReview, mustSignIn, signInResponse } from "@/server/auth";
 import { getPaymentContext, paymentResponse } from "@/server/billing";
@@ -13,6 +13,7 @@ export async function POST(_req: Request, ctx: RouteContext<"/api/reviews/[id]/r
   if (found.review.stage !== "failed") return Response.json({ error: "This review isn't in a failed state." }, { status: 409 });
   const payment = isHosted() ? await getPaymentContext(found.viewer.userId!) : null;
   if (payment && !payment.ready) return paymentResponse(payment);
+  if (payment) await setPaidWith(id, payment.method);
   await updateReview(id, { stage: "queued", error: null, stageDetail: null });
   await enqueue(id, "process");
   return Response.json({ ok: true });

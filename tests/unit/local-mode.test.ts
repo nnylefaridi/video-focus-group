@@ -54,8 +54,22 @@ describe("local mode", () => {
     const board = [liveProfiles().find((p) => p.categories.includes("creator"))!.id];
     const res = await POST(new Request("http://127.0.0.1:3000/api/reviews", { method: "POST", body: JSON.stringify({ answers, board }) }));
     expect(res.status).toBe(200);
-    expect(await reviews.getReview((await res.json()).id)).toBeTruthy();
+    const made = await reviews.getReview((await res.json()).id);
+    expect(made).toBeTruthy();
+    expect(made!.paidWith).toBeNull();
     expect((await db.q("SELECT 1 FROM app.account_billing")).length).toBe(0);
+  });
+
+  it("has no own API key to save, and runs every review on the server's key", async () => {
+    const key = await import("@/app/api/account/key/route");
+    const put = new Request("http://127.0.0.1:3000/api/account/key", { method: "PUT", body: '{"key":"sk-ant-api03-abcdefghijklmnopqrstuvwxyz"}' });
+    expect((await key.PUT(put)).status).toBe(404);
+    expect((await key.DELETE()).status).toBe(404);
+    expect((await db.q("SELECT 1 FROM app.api_keys")).length).toBe(0);
+    const { reviewKey } = await import("@/server/apikeys");
+    const id = reviews.newReviewId();
+    await reviews.createReview({ id, answers: [], intent: {}, board: [], title: "t", paidWith: "own_key", userId: "4f1c1f2e-8e0e-4b9a-9d55-000000000001" });
+    expect(await reviewKey(id)).toEqual({ kind: "server", paidWith: null });
   });
 
   it("has no payment choice to make", async () => {

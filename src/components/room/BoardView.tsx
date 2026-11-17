@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { STAGE_LABELS, type ReviewStage } from "@/core/review";
+import { API_KEY_HREF, isKeyProblem } from "@/core/ownkey";
 import { Boardroom } from "../board/Boardroom";
 import type { PuppetState } from "../puppets/Puppet";
 import { Avatar } from "../Avatar";
@@ -10,6 +11,15 @@ import { Next, Pause, Play, Prev } from "../Icons";
 import { useRoom } from "./context";
 import { Player } from "./Player";
 import { TimeChip } from "./Evidence";
+
+/** Hosted mode: a review stopped because of the owner's own API key. This is where that's fixed. */
+function FixKeyLink() {
+  return (
+    <Link href={API_KEY_HREF} className="mt-2 text-sm font-bold text-ink underline decoration-line-strong underline-offset-4 hover:text-accent">
+      Fix your API key
+    </Link>
+  );
+}
 
 const STEPS: ReviewStage[] = ["ingesting", "transcribing", "sampling", "perceiving", "reviewing", "discussing", "synthesizing"];
 
@@ -134,10 +144,11 @@ export function BoardView({
             <>
               <p className="font-bold text-warn">The review stopped partway.</p>
               <p className="mt-1 text-sm text-warn">{view.error}</p>
+              {(isKeyProblem(view.error) || isKeyProblem(retryError)) && <FixKeyLink />}
               <button onClick={async () => setRetryError(await onRetry())} className="mt-3 rounded-full bg-accent px-5 py-2 text-sm font-bold text-accent-ink">
                 Try again
               </button>
-              {retryError && (
+              {retryError && retryError !== view.error && (
                 <p role="alert" className="mt-3 rounded-xl bg-warn-soft px-4 py-2.5 text-sm text-warn">
                   {retryError}
                 </p>

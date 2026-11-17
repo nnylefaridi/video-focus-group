@@ -1,4 +1,6 @@
 import { one, q } from "./db";
+import { getKeyInfo, KEY_REJECTED, type KeyInfo } from "./apikeys";
+import { NEEDS_KEY } from "@/core/ownkey";
 
 /**
  * Hosted mode: how an account pays for its reviews. Local mode never asks; reviews
@@ -29,18 +31,20 @@ export async function setPaymentMethod(userId: string, method: PaymentMethod): P
  * What pays for this account's next review, decided here on the server (never by the
  * browser). `ready` is false with a plain `problem` when the chosen way can't pay yet.
  */
-export type PaymentContext = { method: PaymentMethod | null; ready: boolean; problem: string | null };
+export type PaymentContext = { method: PaymentMethod | null; ready: boolean; problem: string | null; key: KeyInfo | null };
 
 export const CHOOSE_FIRST = "Choose how to pay for reviews first.";
 export const NEEDS_CREDITS = "Add credits first. Your balance is empty.";
-export const NEEDS_KEY = "Add your Anthropic API key first.";
+export { NEEDS_KEY };
 
 export async function getPaymentContext(userId: string): Promise<PaymentContext> {
-  const method = await getPaymentMethod(userId);
-  if (!method) return { method, ready: false, problem: CHOOSE_FIRST };
-  // No balance or stored key exists for any account yet, so neither way can pay.
-  if (method === "credits") return { method, ready: false, problem: NEEDS_CREDITS };
-  return { method, ready: false, problem: NEEDS_KEY };
+  const [method, key] = await Promise.all([getPaymentMethod(userId), getKeyInfo(userId)]);
+  if (!method) return { method, ready: false, problem: CHOOSE_FIRST, key };
+  // No balance exists for any account yet, so credits can't pay.
+  if (method === "credits") return { method, ready: false, problem: NEEDS_CREDITS, key };
+  if (!key) return { method, ready: false, problem: NEEDS_KEY, key };
+  if (key.rejected) return { method, ready: false, problem: KEY_REJECTED, key };
+  return { method, ready: true, problem: null, key };
 }
 
 /** What a route sends back when the account can't pay for a review. The flow shows the payment step for it. */

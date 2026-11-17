@@ -49,7 +49,16 @@ export async function POST(req: Request) {
   const id = newReviewId();
   const title = (fields.summary ?? "Untitled video").slice(0, 120);
   try {
-    await startReview(whoIsCalling(req.headers, viewer.userId), { id, answers: active, intent: fields, board, title, userId: viewer.userId, anonId });
+    await startReview(whoIsCalling(req.headers, viewer.userId), {
+      id,
+      answers: active,
+      intent: fields,
+      board,
+      title,
+      userId: viewer.userId,
+      anonId,
+      paidWith: payment?.method ?? null,
+    });
   } catch (e) {
     if (e instanceof LimitReached) return limitResponse(e);
     throw e;

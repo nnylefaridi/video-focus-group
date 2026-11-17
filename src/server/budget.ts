@@ -2,6 +2,7 @@ import { q, tx, type Query } from "./db";
 import { SPEND_LIMITS } from "./config";
 import { INSERT_REVIEW, insertReviewParams } from "./reviews";
 import type { Who } from "./client";
+import type { PaymentMethod } from "./billing";
 import { authReady } from "@/lib/supabase";
 
 /**
@@ -27,13 +28,15 @@ export function limitResponse(e: LimitReached) {
   return Response.json({ error: e.message, ...(e.loginHelps ? { login: true } : {}) }, { status: 429 });
 }
 
-export async function recordSpend(entry: { label: string; model: string; usd: number; reviewId?: string }) {
-  await q("INSERT INTO app.spend (at, label, model, usd, review_id) VALUES ($1, $2, $3, $4, $5)", [
+/** Logs one paid call. `paidWith` is how its review is paid for (null: the server's key). */
+export async function recordSpend(entry: { label: string; model: string; usd: number; reviewId?: string | null; paidWith?: PaymentMethod | null }) {
+  await q("INSERT INTO app.spend (at, label, model, usd, review_id, paid_with) VALUES ($1, $2, $3, $4, $5, $6::text::app.payment_method)", [
     Date.now(),
     entry.label,
     entry.model,
     entry.usd,
     entry.reviewId ?? null,
+    entry.paidWith ?? null,
   ]);
 }
 
@@ -48,8 +51,12 @@ function startOfMonth(): number {
   return new Date(d.getFullYear(), d.getMonth(), 1).getTime();
 }
 
-async function spentSince(t: number, query: Query = q): Promise<number> {
-  const [row] = await query<{ usd: number }>("SELECT COALESCE(SUM(usd), 0)::float8 AS usd FROM app.spend WHERE at >= $1", [t]);
+/** What the app's key has spent since t. Calls on people's own keys cost the app nothing, so they're left out. */
+async function spentSince(t: number, query: Query = q, ownKeys = false): Promise<number> {
+  const [row] = await query<{ usd: number }>(
+    `SELECT COALESCE(SUM(usd), 0)::float8 AS usd FROM app.spend WHERE at >= $1 AND paid_with IS ${ownKeys ? "NOT DISTINCT" : "DISTINCT"} FROM 'own_key'`,
+    [t],
+  );
   return Number(row.usd);
 }
 
@@ -60,6 +67,11 @@ export async function spendSummary(query: Query = q) {
     dailyLimit: SPEND_LIMITS.dailyUsd,
     monthlyLimit: SPEND_LIMITS.monthlyUsd,
   };
+}
+
+/** What people's own keys spent through Panel this month. Recorded, but not the app's money. */
+export async function ownKeySpendThisMonth(query: Query = q): Promise<number> {
+  return spentSince(startOfMonth(), query, true);
 }
 
 /** Throws before any paid call once the app's budget for today or this month is used up. */
@@ -108,10 +120,13 @@ function personalLimit(who: Who, signedInMessage: string, signedOutMessage: stri
 export async function startReview(who: Who, review: Parameters<typeof insertReviewParams>[0]) {
   await tx(async (t, lock) => {
     await lockAllowances(lock, who);
-    const s = await assertWithinSpendLimits(t);
-    const room = Math.min(s.dailyLimit - s.today, s.monthlyLimit - s.month);
-    if (room < SPEND_LIMITS.typicalReviewUsd)
-      throw new LimitReached("The app's AI budget left for today is less than one review usually costs. Try again after midnight.");
+    // The app's budget protects the server's key; a review on the person's own key doesn't use it.
+    if (review.paidWith !== "own_key") {
+      const s = await assertWithinSpendLimits(t);
+      const room = Math.min(s.dailyLimit - s.today, s.monthlyLimit - s.month);
+      if (room < SPEND_LIMITS.typicalReviewUsd)
+        throw new LimitReached("The app's AI budget left for today is less than one review usually costs. Try again after midnight.");
+    }
     const today = startOfToday();
     const n = await used(t, "client_key", who.person, "review", today);
     if (n >= SPEND_LIMITS.maxReviewsPerDay)
@@ -145,11 +160,26 @@ export async function spendAnswerCheck(who: Who) {
   });
 }
 
+/**
+ * Checking a key with Anthropic is free, but unlimited tries would let someone test
+ * stolen keys through Panel. Every try counts, whether the key worked or not.
+ */
+export async function spendKeyCheck(who: Who) {
+  await tx(async (t, lock) => {
+    await lockAllowances(lock, who);
+    const hourAgo = Date.now() - 3600_000;
+    if ((await used(t, "client_key", who.person, "key_check", hourAgo)) >= SPEND_LIMITS.maxKeyChecksPerHour)
+      throw new LimitReached("You've tried saving a key too many times in the last hour. Take a short break and try again.");
+    await reserve(t, who, "key_check", null);
+  });
+}
+
 /** Follow-up questions per review are capped so one review can't keep spending forever. */
 export async function spendFollowup(who: Who, reviewId: string) {
   await tx(async (t, lock) => {
     await lock(`followup:${reviewId}`);
-    await assertWithinSpendLimits(t);
+    const [review] = await t<{ paid_with: string | null }>("SELECT paid_with::text AS paid_with FROM app.reviews WHERE id = $1", [reviewId]);
+    if (review?.paid_with !== "own_key") await assertWithinSpendLimits(t);
     const [row] = await t<{ n: number }>("SELECT COUNT(*)::int AS n FROM app.usage WHERE review_id = $1 AND kind = 'followup'", [reviewId]);
     if (Number(row.n) >= SPEND_LIMITS.maxFollowupsPerReview)
       throw new LimitReached(`This review has reached its limit of ${SPEND_LIMITS.maxFollowupsPerReview} follow-up questions.`);

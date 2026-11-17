@@ -23,7 +23,7 @@ process.env.PANEL_PEER_HEADER = "x-panel-peer-test";
 const state = vi.hoisted(() => ({
   cookies: new Map<string, string>(),
   user: null as null | { sub: string; email: string },
-  /** Stands in for a balance or a stored key (Tasks 3–4) when a test needs a way that can pay. */
+  /** Stands in for a balance (Task 4) when a test needs a way that can pay. Own keys are tested for real in api-keys.test.ts. */
   canPay: null as null | PaymentContext,
 }));
 vi.mock("next/headers", () => ({
@@ -125,8 +125,8 @@ describe("remembering the choice", () => {
 
     const res = await paymentRoute.POST(post("/api/account/payment", { method: "own_key" }));
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ method: "own_key", ready: false, problem: billing.NEEDS_KEY });
-    expect(await (await paymentRoute.GET()).json()).toEqual({ method: "own_key", ready: false, problem: billing.NEEDS_KEY });
+    expect(await res.json()).toEqual({ method: "own_key", ready: false, problem: billing.NEEDS_KEY, key: null });
+    expect(await (await paymentRoute.GET()).json()).toEqual({ method: "own_key", ready: false, problem: billing.NEEDS_KEY, key: null });
     expect(await billing.getPaymentMethod(user)).toBe("own_key");
   });
 });
@@ -165,7 +165,7 @@ describe("making a review", () => {
 
   it("goes ahead for the account once its way can pay", async () => {
     const user = signIn();
-    state.canPay = { method: "credits", ready: true, problem: null };
+    state.canPay = { method: "credits", ready: true, problem: null, key: null };
     const res = await makeReview();
     expect(res.status).toBe(200);
     expect((await reviews.getReview((await res.json()).id))?.userId).toBe(user);
@@ -173,12 +173,12 @@ describe("making a review", () => {
 
   it("doesn't need the server's key when the account pays with its own", async () => {
     signIn();
-    state.canPay = { method: "own_key", ready: true, problem: null };
+    state.canPay = { method: "own_key", ready: true, problem: null, key: { last4: "abcd", savedAt: 1, rejected: false } };
     const key = process.env.ANTHROPIC_API_KEY;
     delete process.env.ANTHROPIC_API_KEY;
     try {
       expect((await makeReview()).status).toBe(200);
-      state.canPay = { method: "credits", ready: true, problem: null };
+      state.canPay = { method: "credits", ready: true, problem: null, key: null };
       expect((await makeReview()).status).toBe(503);
     } finally {
       process.env.ANTHROPIC_API_KEY = key;
