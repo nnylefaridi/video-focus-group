@@ -8,7 +8,10 @@ FROM node:22-bookworm-slim AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
 # The lock file is written by npm 11; npm 10 (node 22's own) reads it as out of sync, so use 11.
-RUN npm install -g npm@11.6.2 && npm ci
+# No install scripts: the only ones that would build or download anything are for tests and local
+# mode (better-sqlite3 compiles from source, embedded Postgres, onnxruntime-node). The build and the
+# hosted server need none of them; checked with a standalone build and start.
+RUN npm install -g npm@11.6.2 && npm ci --ignore-scripts
 COPY . .
 # The NEXT_PUBLIC_ settings are built into the pages, so they're needed here. They're the
 # Supabase project's public address and publishable key, not secrets. Never declare a secret as
