@@ -1,4 +1,4 @@
-// Starts Panel's website with Next.js's own server: `next dev` or `next start`. There's no
+// Starts Video Focus Group's website with Next.js's own server: `next dev` or `next start`. There's no
 // separate worker: reviews are made inside the website's process (src/server/runner.ts).
 // Shared by `npm run dev` (scripts/dev.mjs) and `npm start` (scripts/start.mjs).
 //
@@ -39,7 +39,7 @@ export async function serve({ dev }) {
   process.env.NODE_ENV = nodeEnv;
 
   if (await portTaken(hostname, port)) {
-    console.error(`\nPort ${port} is already in use (is Panel already running in another window?). Stop that, or run on another port: PORT=${port + 1} npm ${dev ? "run dev" : "start"}\n`);
+    console.error(`\nPort ${port} is already in use (is Video Focus Group already running in another window?). Stop that, or run on another port: PORT=${port + 1} npm ${dev ? "run dev" : "start"}\n`);
     await db?.stop().catch(() => {});
     process.exit(1);
   }

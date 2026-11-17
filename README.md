@@ -1,10 +1,10 @@
-# Panel
+# Video Focus Group
 
-Panel is a local app for people who make short videos. You answer a few questions, it recommends a board of AI reviewers modeled on well-known people in your field, and it comes back with timestamped, evidence-backed notes and a revision plan. Your videos and reviews stay on your computer. A review sends sampled frames and the transcript to Anthropic with your own API key. Your browser prepares the video on your own device first (a smaller 720p copy, stills and a transcript), using a speech-to-text model it downloads once (about 79 MB, from Hugging Face). Those are the only outside services it uses.
+Video Focus Group is a local app for people who make short videos. You answer a few questions, it recommends a board of AI reviewers modeled on well-known people in your field, and it comes back with timestamped, evidence-backed notes and a revision plan. Your videos and reviews stay on your computer. A review sends sampled frames and the transcript to Anthropic with your own API key. Your browser prepares the video on your own device first (a smaller 720p copy, stills and a transcript), using a speech-to-text model it downloads once (about 79 MB, from Hugging Face). Those are the only outside services it uses.
 
-![A real review in Panel, from the opening question through the board, processing, the video, a follow-up, and the revision plan](.github/assets/panel-demo.gif)
+![A real review in Video Focus Group, from the opening question through the board, processing, the video, a follow-up, and the revision plan](.github/assets/panel-demo.gif)
 
-> **About the reviewers.** Panel isn't affiliated with, sponsored by or endorsed by any of the people it names (Mark Rober, Casey Neistat, MrBeast, Alex Hormozi and the others in `src/experts/profiles`). Each reviewer is Claude prompted with a summary of that person's public talks, books and interviews, linked to its sources. What a reviewer says is the model's reading of those ideas, not the person's opinion, and the cartoon likenesses are illustrations, not their photos or logos.
+> **About the reviewers.** Video Focus Group isn't affiliated with, sponsored by or endorsed by any of the people it names (Mark Rober, Casey Neistat, MrBeast, Alex Hormozi and the others in `src/experts/profiles`). Each reviewer is Claude prompted with a summary of that person's public talks, books and interviews, linked to its sources. What a reviewer says is the model's reading of those ideas, not the person's opinion, and the cartoon likenesses are illustrations, not their photos or logos.
 
 ## What you need
 
@@ -13,9 +13,9 @@ Panel is a local app for people who make short videos. You answer a few question
 - **An Anthropic API key with billing turned on.** You pay Anthropic directly. Create the key at [console.anthropic.com](https://console.anthropic.com) under **Settings → API Keys**.
 - About **500 MB** of free disk for the app and your reviews.
 
-**What a review costs.** In our own testing, across 8 finished reviews, a review cost $0.92 on average and $1.27 at most. Panel refuses to start one when less than **$1.50** is left today or this month (`typicalReviewUsd`), stops that review and its follow-ups at **$3** (`REVIEW_COST_CAP_USD`), and stops the app at **$10** a day and **$40** a month (`DAILY_LIMIT_USD`, `MONTHLY_LIMIT_USD`). Those are defaults. Calls are priced in `src/ai/client.ts`: Haiku for the opening questions, Sonnet for frames, Opus for each reviewer. What you pay still depends on the video. In the Anthropic Console, open **Settings → Limits** and set a hard monthly spend limit on the key. Anthropic enforces that even if something on your computer goes wrong.
+**What a review costs.** In our own testing, across 8 finished reviews, a review cost $0.92 on average and $1.27 at most. Video Focus Group refuses to start one when less than **$1.50** is left today or this month (`typicalReviewUsd`), stops that review and its follow-ups at **$3** (`REVIEW_COST_CAP_USD`), and stops the app at **$10** a day and **$40** a month (`DAILY_LIMIT_USD`, `MONTHLY_LIMIT_USD`). Those are defaults. Calls are priced in `src/ai/client.ts`: Haiku for the opening questions, Sonnet for frames, Opus for each reviewer. What you pay still depends on the video. In the Anthropic Console, open **Settings → Limits** and set a hard monthly spend limit on the key. Anthropic enforces that even if something on your computer goes wrong.
 
-Panel runs on macOS and Ubuntu 24.04. Windows isn't supported yet.
+Video Focus Group runs on macOS and Ubuntu 24.04. Windows isn't supported yet.
 
 ## Set it up (once)
 
@@ -47,7 +47,7 @@ node -v && npm -v
 
 ### Then, on either system
 
-1. **Download Panel:**
+1. **Download Video Focus Group:**
 
    ```bash
    git clone https://github.com/nnylefaridi/video-focus-group.git
@@ -60,7 +60,7 @@ node -v && npm -v
    npm install
    ```
 
-3. **Get an Anthropic API key.** In [console.anthropic.com](https://console.anthropic.com), add billing under **Settings → Billing**. Then open **Settings → API Keys**, click **Create Key**, name it `Panel`, and copy it (it starts with `sk-ant-`).
+3. **Get an Anthropic API key.** In [console.anthropic.com](https://console.anthropic.com), add billing under **Settings → Billing**. Then open **Settings → API Keys**, click **Create Key**, name it `Video Focus Group`, and copy it (it starts with `sk-ant-`).
 
 4. **Run setup:**
 
@@ -76,13 +76,13 @@ node -v && npm -v
    npm run setup -- --skip-key
    ```
 
-   That finishes the rest of setup. Add `ANTHROPIC_API_KEY=sk-ant-...` to `.env.local` later, or run `npm run setup` again in a terminal and paste it. Panel will open without a key. A review will not run until the key is there.
+   That finishes the rest of setup. Add `ANTHROPIC_API_KEY=sk-ant-...` to `.env.local` later, or run `npm run setup` again in a terminal and paste it. Video Focus Group will open without a key. A review will not run until the key is there.
 
 **Strongly recommended:** in the Anthropic Console, open **Settings → Limits** and set a monthly spend limit for your key.
 
 ## Use it
 
-Start Panel:
+Start Video Focus Group:
 
 ```bash
 npm run dev
@@ -93,13 +93,13 @@ Then open **http://127.0.0.1:3000** in your browser.
 - Answer a few questions about your video, check the board of reviewers, then upload the video (MP4, MOV or WebM, up to 3 minutes). Your browser prepares it first: the first time, it downloads the speech model (about 79 MB), and preparing takes about as long as the video on a laptop, longer on a phone. Keep the tab open until it's sent.
 - The review takes a few minutes. You can leave the page and come back: past reviews are under **All reviews** (inside any review) at **http://127.0.0.1:3000/reviews**.
 - Ask any reviewer follow-up questions in the **Discussion** tab, under **Ask a reviewer**.
-- **To stop Panel**, go back to the terminal and press **Ctrl + C**. Next time, `cd video-focus-group` and run `npm run dev` again.
+- **To stop Video Focus Group**, go back to the terminal and press **Ctrl + C**. Next time, `cd video-focus-group` and run `npm run dev` again.
 
-Only your computer can open Panel: it listens on `127.0.0.1`, so nobody else on your network can reach it or spend your key.
+Only your computer can open Video Focus Group: it listens on `127.0.0.1`, so nobody else on your network can reach it or spend your key.
 
 ## Update to the newest version
 
-In the `video-focus-group` folder (stop Panel first with Ctrl + C):
+In the `video-focus-group` folder (stop Video Focus Group first with Ctrl + C):
 
 ```bash
 git pull
@@ -115,20 +115,20 @@ npm run setup
 | The upload step says this browser can't prepare videos | Use a recent Chrome, Edge, Safari or Firefox. |
 | "Getting the speech reader ready" doesn't move | The browser downloads the speech model once (about 79 MB from huggingface.co, and its runtime from cdn.jsdelivr.net). Check your connection, or that nothing blocks those sites, and try again. |
 | "Anthropic rejected that key" | Copy the whole key again (it starts with `sk-ant-`) and check billing is set up under **Settings → Billing**. Setup does not print the key. |
-| "Anthropic rejected the API key in .env.local" or "out of credits" | Run `npm run setup` and paste a working key, or add credits under **Settings → Billing**. Then restart Panel. |
-| "Couldn't reach Anthropic to check it, so it's saved as is." | The key was written without a live check. Start Panel, and if a review says the key was rejected, replace it. |
-| "Panel is already running in another Terminal window" | The built-in database port (54329) is already open. Use that window, or press Ctrl + C there first. |
-| "The local database couldn't start" or "couldn't be created" | Read the reason in the message. Files live in `data/pg` and the database only listens on `127.0.0.1:54329`. If a previous run was left behind, stop Panel and try again. Deleting `data/pg` removes reviews stored in the built-in database; run `npm run setup` afterwards. |
+| "Anthropic rejected the API key in .env.local" or "out of credits" | Run `npm run setup` and paste a working key, or add credits under **Settings → Billing**. Then restart Video Focus Group. |
+| "Couldn't reach Anthropic to check it, so it's saved as is." | The key was written without a live check. Start Video Focus Group, and if a review says the key was rejected, replace it. |
+| "Video Focus Group is already running in another Terminal window" | The built-in database port (54329) is already open. Use that window, or press Ctrl + C there first. |
+| "The local database couldn't start" or "couldn't be created" | Read the reason in the message. Files live in `data/pg` and the database only listens on `127.0.0.1:54329`. If a previous run was left behind, stop Video Focus Group and try again. Deleting `data/pg` removes reviews stored in the built-in database; run `npm run setup` afterwards. |
 | "Port 3000 is already in use" | Something else is using port 3000. Run `PORT=3001 npm run dev` and open http://127.0.0.1:3001. |
 | A limit message ("budget is used up", "daily limit") | It resets at the time it says. To raise it, see [Spending limits](#spending-limits). |
 | A review says "failed" | Press **Try again** in the review. Finished steps are kept, so it continues where it stopped. |
-| Anything else | Stop Panel (Ctrl + C), run `npm run setup`, then `npm run dev` again. Error details appear in the terminal. |
+| Anything else | Stop Video Focus Group (Ctrl + C), run `npm run setup`, then `npm run dev` again. Error details appear in the terminal. |
 
 Your reviews, videos and database are in the `data` folder. Deleting it removes them all (run `npm run setup` afterwards to start fresh).
 
 ## Spending limits
 
-Every paid call is checked against these first. To change one, add the line to `.env.local` (for example `DAILY_LIMIT_USD=5`) and restart Panel.
+Every paid call is checked against these first. To change one, add the line to `.env.local` (for example `DAILY_LIMIT_USD=5`) and restart Video Focus Group.
 
 | Setting | Default | What happens when it's reached |
 |---|---|---|
@@ -139,7 +139,7 @@ Every paid call is checked against these first. To change one, add the line to `
 | `MAX_FOLLOWUPS_PER_REVIEW` | 20 | No more follow-up questions on that review |
 | `MAX_ANSWER_CHECKS_PER_HOUR` | 60 | Answers to the questions pause for a bit |
 
-A new review is also refused if less than $1.50 is left in today's or this month's budget. **Your reviews** shows what you've used and what Panel has spent today and this month.
+A new review is also refused if less than $1.50 is left in today's or this month's budget. **Your reviews** shows what you've used and what Video Focus Group has spent today and this month.
 
 ## How a review works
 
@@ -153,7 +153,7 @@ A new review is also refused if less than $1.50 is left in today's or this month
 
 ## Optional: accounts with Supabase
 
-You don't need this to use Panel. It adds sign-in (Google, or email and password) and keeps a record of reviews and their videos in a free [Supabase](https://supabase.com) project, which matters if more than one person uses the same copy. Without it, Panel runs in **local mode**: no sign-in, and every review on your computer is yours.
+You don't need this to use Video Focus Group. It adds sign-in (Google, or email and password) and keeps a record of reviews and their videos in a free [Supabase](https://supabase.com) project, which matters if more than one person uses the same copy. Without it, Video Focus Group runs in **local mode**: no sign-in, and every review on your computer is yours.
 
 
 1. **Project.** Sign in at [supabase.com](https://supabase.com), create a new project (any name and region), and save the database password it asks you for.
@@ -169,13 +169,13 @@ You don't need this to use Panel. It adds sign-in (Google, or email and password
      - **Confirm signup:** `{{ .SiteURL }}/auth/callback?token_hash={{ .TokenHash }}&type=email&next=/reviews`
      - **Reset password:** `{{ .SiteURL }}/auth/callback?token_hash={{ .TokenHash }}&type=recovery&next=/login/new-password`
 6. **Google.** In [Google Cloud Console](https://console.cloud.google.com/apis/credentials): create a project, set up the **OAuth consent screen** (External), then **Create credentials → OAuth client ID → Web application**. Under **Authorized redirect URIs** add `https://<your-project>.supabase.co/auth/v1/callback`. Copy the client ID and secret into Supabase under **Authentication → Sign In / Providers → Google**, and turn it on.
-7. **Restart** Panel (Ctrl+C, then `npm run dev`). **Your reviews** now asks people to log in to keep a record, and reviews made in a browser before signing in move into the account.
+7. **Restart** Video Focus Group (Ctrl+C, then `npm run dev`). **Your reviews** now asks people to log in to keep a record, and reviews made in a browser before signing in move into the account.
 
 With accounts on:
-- Each review is visible only to its account (or, before sign-in, the browser that made it). The tables live in a schema Supabase's public API doesn't expose, with row level security on, so only Panel's server can read them.
+- Each review is visible only to its account (or, before sign-in, the browser that made it). The tables live in a schema Supabase's public API doesn't expose, with row level security on, so only Video Focus Group's server can read them.
 - Signed-in people's videos, posters, captions and frames are copied to the private `review-media` bucket and shown through six-hour signed links. The free plan has 1 GB; the browser always sends a 720p copy, so a review takes about 5–30 MB. A file over the 50 MB limit isn't copied and stays on this computer only.
 - Limits are per account when signed in and per network when signed out, with an overall ceiling per network (`MAX_REVIEWS_PER_NETWORK_PER_DAY`, default 40; `MAX_ANSWER_CHECKS_PER_NETWORK_PER_HOUR`, default 300). Signed-in people see their limits on **Your reviews**; add your email to `OWNER_EMAILS` to also see what the app has spent.
-- Reviews from an older version of Panel (`data/app.db`) can be moved into an account: `npm run db:import-local -- --email you@example.com`.
+- Reviews from an older version of Video Focus Group (`data/app.db`) can be moved into an account: `npm run db:import-local -- --email you@example.com`.
 
 ## For developers
 
@@ -226,4 +226,4 @@ npm run kb:validate -- --urls    # also check every source link
 
 ## License
 
-The code is released under the [MIT License](LICENSE). The names of the people Panel's reviewers are modeled on, and their likenesses, belong to those people and aren't covered by it.
+The code is released under the [MIT License](LICENSE). The names of the people Video Focus Group's reviewers are modeled on, and their likenesses, belong to those people and aren't covered by it.

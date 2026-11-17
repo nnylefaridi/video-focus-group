@@ -185,7 +185,7 @@ describe("what hosted mode needs before it starts", () => {
     expect(e).toBeInstanceOf(StartupError);
     expect(e!.message).toBe(
       [
-        "Panel can't start in hosted mode (PANEL_MODE=hosted).",
+        "Video Focus Group can't start in hosted mode (PANEL_MODE=hosted).",
         "These settings are missing:",
         "  - NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
         "  - DATABASE_URL",
@@ -339,7 +339,7 @@ describe("the startup check inside the server (src/instrumentation.ts)", () => {
     const r = await boot({ PANEL_MODE: "hosted" });
     expect(r.result).toBe("exit 1");
     expect(r.exited).toEqual([1]);
-    expect(r.printed).toMatch(/Panel can't start in hosted mode/);
+    expect(r.printed).toMatch(/Video Focus Group can't start in hosted mode/);
     expect(r.printed).toMatch(/- MEDIA_SECRET/);
     expect(r.printed).toMatch(/- CLIENT_IP_HEADER \(or TRUSTED_PROXIES\)/);
   });

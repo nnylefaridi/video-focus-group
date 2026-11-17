@@ -52,7 +52,7 @@ function nodeInstallLines(platform, release, arch) {
   if (isDebianFamily(release)) {
     const token = nodeTarballArch(arch);
     const lines = [
-      "Panel needs Node.js 20.9 or newer. Ubuntu 24.04's own nodejs package is 18.19.1, which is too old, so don't install Node from apt on that release.",
+      "Video Focus Group needs Node.js 20.9 or newer. Ubuntu 24.04's own nodejs package is 18.19.1, which is too old, so don't install Node from apt on that release.",
       "Install Node.js 22 from nodejs.org. The x86_64 tarball (v22.23.5 when checked) was unpacked and run on Ubuntu 24.04:",
       "",
     ];

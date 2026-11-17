@@ -1,4 +1,4 @@
-// One-time setup for running Panel on your own computer:  npm run setup
+// One-time setup for running Video Focus Group on your own computer:  npm run setup
 // Checks Node.js, asks for your Anthropic API
 // key (and checks it works), and prepares the built-in database. Safe to run again.
 //
@@ -28,7 +28,7 @@ function loadRelease() {
   }
 }
 
-console.log("\nSetting up Panel\n");
+console.log("\nSetting up Video Focus Group\n");
 
 const release = loadRelease();
 const plan = installPlan({
@@ -76,11 +76,11 @@ if (!key && keyStatus !== "rejected") {
   if (skipKey || !process.stdin.isTTY) {
     keyStatus = "skipped";
     console.log("  No Anthropic API key yet, so this step was skipped.");
-    if (!process.stdin.isTTY && !skipKey) console.log("  This isn't an interactive terminal, so Panel can't ask you to paste one.");
+    if (!process.stdin.isTTY && !skipKey) console.log("  This isn't an interactive terminal, so Video Focus Group can't ask you to paste one.");
     console.log("  Reviews won't run until .env.local contains a working ANTHROPIC_API_KEY.");
     console.log("  Run npm run setup again in a terminal and paste the key, or add the line yourself.");
   } else {
-    console.log("\n  Panel needs an Anthropic API key. Create one at https://console.anthropic.com");
+    console.log("\n  Video Focus Group needs an Anthropic API key. Create one at https://console.anthropic.com");
     console.log("  (Settings → API Keys; add billing first). It stays in .env.local on this computer.");
     console.log("  To finish without a key, press Ctrl+C and run: npm run setup -- --skip-key\n");
     // Lines are read through an iterator so nothing typed is lost while a key is being checked.
@@ -116,7 +116,7 @@ else if (keyStatus === "skipped") console.log("  ! Anthropic API key was not set
 
 // Database
 if (wantsLocalDatabase()) {
-  if (await localDatabaseRunning()) ok("Built-in database is ready (Panel is running)");
+  if (await localDatabaseRunning()) ok("Built-in database is ready (Video Focus Group is running)");
   else {
     const db = await startLocalDatabase().catch((e) => fail(e instanceof Error ? e.message : String(e)));
     await db.stop();
@@ -127,7 +127,7 @@ if (wantsLocalDatabase()) {
 if (keyStatus === "rejected") {
   console.error("\nThe tools and the built-in database are ready, but Anthropic rejected the API key in .env.local.");
   console.error("The key was not printed. Replace ANTHROPIC_API_KEY in .env.local, or run npm run setup in a terminal and paste a new one.");
-  console.error("Then start Panel with:\n\n    npm run dev\n");
+  console.error("Then start Video Focus Group with:\n\n    npm run dev\n");
   process.exit(1);
 }
 if (keyStatus === "skipped") {
@@ -135,11 +135,11 @@ if (keyStatus === "skipped") {
   console.log("Add one line to .env.local (it stays on this computer):\n");
   console.log("    ANTHROPIC_API_KEY=sk-ant-...\n");
   console.log("Or run npm run setup again in a terminal and paste the key.");
-  console.log("Panel will open without a key, and a review will not run until the key is there.\n");
+  console.log("Video Focus Group will open without a key, and a review will not run until the key is there.\n");
   console.log("    npm run dev\n");
   console.log("then open http://127.0.0.1:3000\n");
   process.exit(0);
 }
 
-console.log("\nAll set. Start Panel with:\n\n    npm run dev\n\nthen open http://127.0.0.1:3000\n");
+console.log("\nAll set. Start Video Focus Group with:\n\n    npm run dev\n\nthen open http://127.0.0.1:3000\n");
 process.exit(0);

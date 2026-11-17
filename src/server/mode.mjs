@@ -143,13 +143,13 @@ export function hostedProblems(env) {
   return { missing, invalid };
 }
 
-/** Checks the settings for the chosen mode. Throws StartupError with a plain explanation if Panel can't start. */
+/** Checks the settings for the chosen mode. Throws StartupError with a plain explanation if Video Focus Group can't start. */
 export function checkStartup(env) {
   const mode = parseMode(env.PANEL_MODE);
   if (mode === "local") return { mode };
   const { missing, invalid } = hostedProblems(env);
   if (!missing.length && !invalid.length) return { mode };
-  const lines = ["Panel can't start in hosted mode (PANEL_MODE=hosted)."];
+  const lines = ["Video Focus Group can't start in hosted mode (PANEL_MODE=hosted)."];
   if (missing.length) lines.push("These settings are missing:", ...missing.map((k) => `  - ${k}`));
   if (invalid.length) lines.push("These settings need fixing:", ...invalid.map((k) => `  - ${k}`));
   lines.push("Set them in your host's environment (on Render: the service's Environment tab; on Fly: fly secrets set NAME=value). The hosted section of .env.example explains each one.");

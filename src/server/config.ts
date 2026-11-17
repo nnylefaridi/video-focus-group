@@ -21,7 +21,7 @@ export function isHosted(): boolean {
 /** Hosted mode's public address (HOSTED_PUBLIC_URL), where sign-in and payments send people back to. */
 export function hostedOrigin(): string {
   const origin = publicOriginOf(process.env.HOSTED_PUBLIC_URL);
-  if (!origin) throw new Error("HOSTED_PUBLIC_URL isn't set to the site's public https address. Set it and restart Panel.");
+  if (!origin) throw new Error("HOSTED_PUBLIC_URL isn't set to the site's public https address. Set it and restart Video Focus Group.");
   return origin;
 }
 

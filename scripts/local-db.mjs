@@ -1,4 +1,4 @@
-// The built-in database for running Panel on your own computer: a real Postgres
+// The built-in database for running Video Focus Group on your own computer: a real Postgres
 // (from the embedded-postgres package) that lives in data/pg and only accepts
 // connections from this computer. Used when DATABASE_URL isn't set, so no
 // database needs installing or an account anywhere.
@@ -27,13 +27,13 @@ function databaseHint(why) {
     return "Port 54329 is already taken. Stop the other program using it, then try again.";
   }
   if (/postmaster\.pid|lock file|another postgres|being used by another process/.test(text)) {
-    return "The built-in database looks like it was left running. Stop Panel with Ctrl + C. If it still fails, delete the data/pg folder (that deletes reviews stored in the built-in database) and run npm run setup again.";
+    return "The built-in database looks like it was left running. Stop Video Focus Group with Ctrl + C. If it still fails, delete the data/pg folder (that deletes reviews stored in the built-in database) and run npm run setup again.";
   }
   if (/locale|lc_all|lc_ctype|invalid locale/.test(text)) {
     return "Postgres couldn't start because of a locale. On Ubuntu, `locale -a` should list en_US.utf8 or C.utf8 (those are the names the built-in database looks for). Then run npm run setup again.";
   }
   if (/permission denied|eacces/.test(text)) {
-    return "Panel couldn't write the database files under data/pg. Fix that folder's permissions and run npm run setup again.";
+    return "Video Focus Group couldn't write the database files under data/pg. Fix that folder's permissions and run npm run setup again.";
   }
   if (/no space left|enospc/.test(text)) {
     return "The disk is full. Free some space and run npm run setup again.";
@@ -41,7 +41,7 @@ function databaseHint(why) {
   return "Run npm run setup, then npm run dev again. Database files are in data/pg and the server only listens on 127.0.0.1:54329. Deleting data/pg removes reviews stored in the built-in database.";
 }
 
-/** True when the local database is already running (Panel is open in another window). */
+/** True when the local database is already running (Video Focus Group is open in another window). */
 export const localDatabaseRunning = () =>
   new Promise((resolve) => {
     const s = net.connect(PORT, "127.0.0.1");
@@ -52,7 +52,7 @@ export const localDatabaseRunning = () =>
 /** Starts the local database (creating it the first time) and returns how to stop it. */
 export async function startLocalDatabase({ quiet = true } = {}) {
   if (await localDatabaseRunning())
-    throw new LocalDatabaseError("Panel is already running in another Terminal window. Use that one, or press Ctrl + C there first.");
+    throw new LocalDatabaseError("Video Focus Group is already running in another Terminal window. Use that one, or press Ctrl + C there first.");
   const dir = path.join(process.env.DATA_DIR ?? path.join(process.cwd(), "data"), "pg");
   const pg = new EmbeddedPostgres({
     databaseDir: dir,

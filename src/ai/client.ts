@@ -72,8 +72,8 @@ async function accountProblem(e: unknown, ownKeyOf: string | null): Promise<Erro
       return new AiUnavailable("Your Anthropic account is out of credits. Add some under Settings → Billing in the Anthropic Console, then run the review again.");
     return e;
   }
-  if (e.status === 401) return new AiUnavailable("Anthropic rejected the API key in .env.local. Run npm run setup to enter a working key, then restart Panel.");
-  if (e.status === 403) return new AiUnavailable("This Anthropic API key isn't allowed to use the models Panel needs. Check the key's workspace in the Anthropic Console.");
+  if (e.status === 401) return new AiUnavailable("Anthropic rejected the API key in .env.local. Run npm run setup to enter a working key, then restart Video Focus Group.");
+  if (e.status === 403) return new AiUnavailable("This Anthropic API key isn't allowed to use the models Video Focus Group needs. Check the key's workspace in the Anthropic Console.");
   if (e.status === 400 && /credit balance|billing/i.test(e.message)) return new AiUnavailable("Your Anthropic account is out of credits. Add some under Settings → Billing in the Anthropic Console, then try again.");
   return e;
 }

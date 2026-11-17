@@ -87,7 +87,7 @@ async function open(): Promise<Driver> {
     await migrate(d);
   } catch (e) {
     if (/ECONNREFUSED|connect/i.test(String((e as { code?: string }).code ?? e)) && url === LOCAL_DATABASE_URL)
-      throw new NotConfigured("The local database isn't running. Start Panel with `npm run dev`.");
+      throw new NotConfigured("The local database isn't running. Start Video Focus Group with `npm run dev`.");
     throw e;
   }
   return d;

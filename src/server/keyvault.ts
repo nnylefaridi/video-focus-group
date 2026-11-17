@@ -20,7 +20,7 @@ function secretFor(version: number): Buffer {
   if (version !== 1) throw new KeyVaultUnavailable(`This key was sealed with secret version ${version}, which this copy of Panel doesn't have.`);
   const secret = encryptionSecretOf(process.env.KEY_ENCRYPTION_SECRET);
   if (!secret)
-    throw new KeyVaultUnavailable("KEY_ENCRYPTION_SECRET isn't set to 32 random bytes (base64 or hex). Make one with `openssl rand -base64 32`, set it, and restart Panel.");
+    throw new KeyVaultUnavailable("KEY_ENCRYPTION_SECRET isn't set to 32 random bytes (base64 or hex). Make one with `openssl rand -base64 32`, set it, and restart Video Focus Group.");
   return secret;
 }
 

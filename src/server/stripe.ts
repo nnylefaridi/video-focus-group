@@ -15,7 +15,7 @@ let client: { key: string; stripe: Stripe } | null = null;
 
 export function stripeClient(): Stripe {
   const key = process.env.STRIPE_SECRET_KEY?.trim();
-  if (!key) throw new StripeNotConfigured("STRIPE_SECRET_KEY isn't set, so Panel can't take payments. Set it to the secret key from the Stripe Dashboard and restart Panel.");
+  if (!key) throw new StripeNotConfigured("STRIPE_SECRET_KEY isn't set, so Video Focus Group can't take payments. Set it to the secret key from the Stripe Dashboard and restart Video Focus Group.");
   if (client?.key !== key) client = { key, stripe: new Stripe(key, { maxNetworkRetries: 2, appInfo: { name: "Video Focus Group" } }) };
   return client.stripe;
 }
@@ -23,7 +23,7 @@ export function stripeClient(): Stripe {
 function webhookSecret(): string {
   const secret = process.env.STRIPE_WEBHOOK_SECRET?.trim();
   if (!secret)
-    throw new StripeNotConfigured("STRIPE_WEBHOOK_SECRET isn't set, so Panel can't check that webhooks come from Stripe. Set it to the endpoint's signing secret and restart Panel.");
+    throw new StripeNotConfigured("STRIPE_WEBHOOK_SECRET isn't set, so Video Focus Group can't check that webhooks come from Stripe. Set it to the endpoint's signing secret and restart Video Focus Group.");
   return secret;
 }
 
