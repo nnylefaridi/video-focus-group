@@ -5,6 +5,7 @@
 import { claimNext, finishJob, requeueStale, retryJob } from "../src/server/jobs";
 import { runReview } from "../src/server/process";
 import { storeReviewMedia } from "../src/server/storage";
+import { intakeUpload } from "../src/server/intake";
 import { cleanupAbandonedUploads, getReview, updateReview } from "../src/server/reviews";
 import { AiUnavailable, BudgetExceeded, checkReviewKey } from "../src/ai/client";
 import { isHosted } from "../src/server/config";
@@ -56,6 +57,12 @@ while (!stopping) {
       // Hosted mode never runs a paid review for someone who isn't signed in (the website refuses
       // to make one; this also covers reviews left from before the switch to hosted mode).
       if (isHosted() && !(await getReview(job.reviewId))?.userId) throw new Error("Log in to run this review.");
+      // Hosted: the video went straight to storage. Bring it down and check it first; one that
+      // fails the checks ends the review with its reason, and nothing paid runs.
+      if (isHosted() && (await intakeUpload(job.reviewId, typeof job.payload.name === "string" ? job.payload.name : undefined)) === "rejected") {
+        await finishJob(job.id);
+        continue;
+      }
       // A review on its owner's own key needs that key saved and usable now; each paid call looks it up again.
       await checkReviewKey(job.reviewId);
       await runReview(job.reviewId);

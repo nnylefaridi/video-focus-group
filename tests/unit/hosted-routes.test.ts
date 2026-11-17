@@ -114,6 +114,16 @@ describe("hosted mode, signed out", () => {
 });
 
 describe("hosted mode, signed in", () => {
+  it("refuses the through-the-server upload, pointing to the direct one", async () => {
+    state.user = { sub: "4f1c1f2e-8e0e-4b9a-9d55-0d6c1b2a3c4d", email: "maker@example.com" };
+    const id = reviews.newReviewId();
+    await reviews.createReview({ id, answers: [], intent: { category: "creator" }, board, title: "t", userId: state.user.sub });
+    const res = await videoRoute.PUT(new Request(`https://panel.example.com/api/reviews/${id}/video`, { method: "PUT", body: "x" }), ctx(id));
+    expect(res.status).toBe(410);
+    expect((await res.json()).error).toMatch(/straight to storage/);
+    expect((await reviews.getReview(id))?.stage).toBe("uploading");
+  });
+
   it("makes the review for the account", async () => {
     state.user = { sub: "4f1c1f2e-8e0e-4b9a-9d55-0d6c1b2a3c4d", email: "maker@example.com" };
     const res = await reviewsRoute.POST(post("/api/reviews", { answers: answers(), board }));

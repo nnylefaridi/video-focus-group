@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import { one, q, tx } from "./db";
-import { MEDIA_DIR } from "./config";
+import { isHosted, MEDIA_DIR } from "./config";
 import type { Answer } from "@/core/questionnaire/engine";
 import type { IntentFields } from "@/core/intent";
 import type { Ledger } from "@/core/evidence";
@@ -217,5 +217,10 @@ export async function deleteReview(id: string, opts: { refund?: boolean } = {}) 
   if (r?.userId && r.storedFiles.length) {
     const { removeStoredMedia } = await import("./storage");
     await removeStoredMedia(r.userId, id, r.storedFiles).catch((e) => console.error("[storage] remove failed", e));
+  }
+  // A video sent straight to storage that was never processed (hosted mode).
+  if (r?.userId && !r.ledger && isHosted()) {
+    const { removeUpload } = await import("./storage");
+    await removeUpload(r.userId, id).catch((e) => console.error("[storage] removing the upload failed", e));
   }
 }

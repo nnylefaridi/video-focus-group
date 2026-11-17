@@ -12,9 +12,30 @@ import { PAYMENT_LABELS } from "./PaymentStep";
 import { ApiKeyPanel } from "../account/ApiKeyPanel";
 import { CreditsPanel } from "../account/CreditsPanel";
 import { formatMicros } from "@/core/credits";
+import { ACCEPT, checkFile, checkVideo } from "@/core/uploadChecks";
+import { readVideoMeta } from "./readVideoMeta";
 
 const MAX_BYTES = 250 * 1024 * 1024;
-const ACCEPT = "video/mp4,video/quicktime,video/webm,.mp4,.mov,.m4v,.webm";
+const LOCAL_ACCEPT = "video/mp4,video/quicktime,video/webm,.mp4,.mov,.m4v,.webm";
+
+/** Hosted: sends the video straight to storage at the one-time address, with real progress. */
+function uploadToStorage(url: string, file: File, onProgress: (p: number) => void): Promise<{ ok: boolean; error?: string }> {
+  return new Promise((resolve) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("PUT", url);
+    xhr.setRequestHeader("content-type", file.type || "application/octet-stream");
+    xhr.setRequestHeader("x-upsert", "false");
+    xhr.upload.onprogress = (e) => e.lengthComputable && onProgress(e.loaded / e.total);
+    xhr.onload = () =>
+      resolve(
+        xhr.status >= 200 && xhr.status < 300
+          ? { ok: true }
+          : { ok: false, error: xhr.status === 413 ? "That file is too big for storage. Please export a smaller version." : "The upload failed. Please try again." },
+      );
+    xhr.onerror = () => resolve({ ok: false, error: "The upload was interrupted, so it has to start over. Check your connection and try again." });
+    xhr.send(file);
+  });
+}
 
 function uploadWithProgress(url: string, file: File, onProgress: (p: number) => void): Promise<{ ok: boolean; error?: string }> {
   return new Promise((resolve) => {
@@ -38,6 +59,7 @@ export function UploadStep({
   answers,
   board,
   payment = null,
+  maxUploadMb,
   onBack,
   onDone,
   onChangePayment,
@@ -45,6 +67,8 @@ export function UploadStep({
 }: {
   answers: Answer[];
   board: ExpertCard[];
+  /** Hosted mode: the size limit in MB. Its presence means the video is checked here first and sent straight to storage. */
+  maxUploadMb?: number;
   /** Hosted mode: how the account pays. Null in local mode, which uses the server's own key. */
   payment?: PaymentContext | null;
   onBack: () => void;
@@ -59,12 +83,26 @@ export function UploadStep({
   const [progress, setProgress] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loginHelps, setLoginHelps] = useState(false);
+  /** Reading the chosen video's length and shape, before anything is sent. */
+  const [checking, setChecking] = useState(false);
+  const direct = maxUploadMb !== undefined;
 
   async function start(file: File) {
     setError(null);
     setLoginHelps(false);
-    if (file.size > MAX_BYTES) return setError("That file is larger than 250 MB. Please export a smaller version.");
-    if (file.size === 0) return setError("That file is empty.");
+    if (direct) {
+      // Quick checks first, so a problem shows in seconds and not after a long upload.
+      const basics = checkFile(file, maxUploadMb);
+      if (basics) return setError(basics);
+      setChecking(true);
+      const meta = await readVideoMeta(file);
+      setChecking(false);
+      const problem = meta && checkVideo(meta);
+      if (problem) return setError(problem);
+    } else {
+      if (file.size > MAX_BYTES) return setError("That file is larger than 250 MB. Please export a smaller version.");
+      if (file.size === 0) return setError("That file is empty.");
+    }
 
     setProgress(0);
     const res = await fetch("/api/reviews", { method: "POST", body: JSON.stringify({ answers, board: board.map((b) => b.id) }) }).catch(() => null);
@@ -83,16 +121,37 @@ export function UploadStep({
       }
       return setError(data.error ?? "Couldn't start the review.");
     }
-    const up = await uploadWithProgress(`/api/reviews/${data.id}/video`, file, setProgress);
-    if (!up.ok) {
-      setProgress(null);
-      return setError(up.error ?? "The upload failed.");
+    if (direct) {
+      const target = await fetch(`/api/reviews/${data.id}/upload-url`, { method: "POST" }).catch(() => null);
+      const t = target ? await target.json().catch(() => ({})) : {};
+      if (!target?.ok || !t.url) {
+        setProgress(null);
+        return setError(t.error ?? "Couldn't reach Video Focus Group. Please try again.");
+      }
+      const sent = await uploadToStorage(t.url, file, setProgress);
+      if (!sent.ok) {
+        setProgress(null);
+        return setError(sent.error ?? "The upload failed.");
+      }
+      setProgress(1);
+      const done = await fetch(`/api/reviews/${data.id}/upload-complete`, { method: "POST", body: JSON.stringify({ name: file.name }) }).catch(() => null);
+      if (!done?.ok) {
+        const d = done ? await done.json().catch(() => ({})) : {};
+        setProgress(null);
+        return setError(d.error ?? "Your video was sent, but we couldn't confirm it. Please try again.");
+      }
+    } else {
+      const up = await uploadWithProgress(`/api/reviews/${data.id}/video`, file, setProgress);
+      if (!up.ok) {
+        setProgress(null);
+        return setError(up.error ?? "The upload failed.");
+      }
     }
     onDone();
     router.push(`/r/${data.id}`);
   }
 
-  const uploading = progress !== null;
+  const uploading = progress !== null || checking;
 
   return (
     <div className="mx-auto w-full max-w-xl">
@@ -100,7 +159,9 @@ export function UploadStep({
         <ArrowLeft className="h-4 w-4" /> Back
       </button>
       <h1 className="font-display text-[2rem] leading-tight font-extrabold text-ink sm:text-[2.6rem]">Now, the video</h1>
-      <p className="mt-3 font-semibold text-ink-soft">MP4, MOV or WebM, up to 3 minutes and 250 MB.</p>
+      <p className="mt-3 font-semibold text-ink-soft">
+        {direct ? `A vertical MP4, MOV or WebM, up to 3 minutes and ${maxUploadMb} MB.` : "MP4, MOV or WebM, up to 3 minutes and 250 MB."}
+      </p>
 
       {payment?.method && (
         <p className="mt-2 text-sm text-ink-soft">
@@ -150,7 +211,11 @@ export function UploadStep({
             drag ? "bg-accent-soft outline-accent" : "outline-line-strong"
           }`}
         >
-          {uploading ? (
+          {checking ? (
+            <p aria-live="polite" className="font-display font-extrabold text-xl text-ink">
+              Having a quick look at your video…
+            </p>
+          ) : uploading ? (
             <div aria-live="polite">
               <p className="font-display font-extrabold text-xl text-ink">{progress! < 1 ? "Uploading…" : "Checking your video…"}</p>
               <div className="mx-auto mt-5 h-2 max-w-xs overflow-hidden rounded-full bg-paper-deep">
@@ -171,7 +236,7 @@ export function UploadStep({
               <input
                 ref={input}
                 type="file"
-                accept={ACCEPT}
+                accept={direct ? ACCEPT : LOCAL_ACCEPT}
                 className="sr-only"
                 onChange={(e) => {
                   const f = e.target.files?.[0];

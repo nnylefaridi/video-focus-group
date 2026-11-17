@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import { connection } from "next/server";
 import { FlowLoader } from "@/components/flow/FlowLoader";
-import { isHosted } from "@/server/config";
+import { isHosted, MAX_UPLOAD_MB } from "@/server/config";
 import { getViewer } from "@/server/auth";
 import { getPaymentContext } from "@/server/billing";
 
@@ -14,7 +14,8 @@ async function Start() {
   if (!isHosted()) return <FlowLoader />;
   const { userId } = await getViewer();
   if (!userId) return <FlowLoader signInFirst />;
-  return <FlowLoader payment={await getPaymentContext(userId)} />;
+  // Only the size limit goes to the browser; where uploads land is the server's business.
+  return <FlowLoader payment={await getPaymentContext(userId)} maxUploadMb={MAX_UPLOAD_MB} />;
 }
 
 export default function Home() {

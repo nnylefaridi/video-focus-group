@@ -1,5 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
+import { Readable } from "node:stream";
+import { pipeline } from "node:stream/promises";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { SUPABASE_URL } from "@/lib/supabase";
 import { run } from "@/media/exec";
@@ -25,6 +27,55 @@ function storage() {
 }
 
 const objectPath = (userId: string, reviewId: string, file: string) => `${userId}/${reviewId}/${file}`;
+
+/**
+ * Where a video lands when the browser sends it straight to storage. A separate private
+ * bucket from review-media, which only accepts the finished files (MP4, JPEG, VTT) and
+ * would turn away MOV and WebM. Each upload sits at <user id>/<review id>/upload until
+ * it's checked, converted and deleted.
+ */
+const UPLOAD_BUCKET = "review-uploads";
+const UPLOAD_FILE = "upload";
+const uploads = () => {
+  storage(); // the same "set these env vars" message when storage isn't configured
+  return admin!.storage.from(UPLOAD_BUCKET);
+};
+
+/**
+ * A one-time URL for the browser to PUT the video to, valid only for this review's upload path.
+ * Supabase fixes its lifetime at 2 hours; without upsert it can't replace an object that's there.
+ */
+export async function createUploadUrl(userId: string, reviewId: string): Promise<string> {
+  const { data, error } = await uploads().createSignedUploadUrl(objectPath(userId, reviewId, UPLOAD_FILE));
+  if (error || !data) throw new Error(`Couldn't prepare the upload: ${error?.message}`);
+  return data.signedUrl;
+}
+
+/** The uploaded object's size in bytes, or null if nothing has been uploaded for this review. */
+export async function uploadedSize(userId: string, reviewId: string): Promise<number | null> {
+  const { data, error } = await uploads().info(objectPath(userId, reviewId, UPLOAD_FILE));
+  if (error || !data) {
+    if (/not.?found|404|does not exist/i.test(error?.message ?? "")) return null;
+    throw new Error(`Couldn't look for the upload: ${error?.message}`);
+  }
+  return Number(data.size ?? 0);
+}
+
+/** Copies the uploaded object into a local file, streaming so a big video never sits in memory. */
+export async function downloadUpload(userId: string, reviewId: string, dest: string): Promise<void> {
+  const { data, error } = await uploads().createSignedUrl(objectPath(userId, reviewId, UPLOAD_FILE), 300);
+  if (error || !data) throw new Error(`Couldn't fetch the upload: ${error?.message}`);
+  const res = await fetch(data.signedUrl);
+  if (!res.ok || !res.body) throw new Error(`Couldn't fetch the upload (${res.status}).`);
+  fs.mkdirSync(path.dirname(dest), { recursive: true });
+  await pipeline(Readable.fromWeb(res.body as import("node:stream/web").ReadableStream), fs.createWriteStream(dest));
+}
+
+/** Deletes the raw upload. Safe when it's already gone. */
+export async function removeUpload(userId: string, reviewId: string): Promise<void> {
+  const { error } = await uploads().remove([objectPath(userId, reviewId, UPLOAD_FILE)]);
+  if (error) throw new Error(error.message);
+}
 
 /** The files a finished review needs: the playable video, poster, captions and every sampled frame. */
 function localMediaFiles(dir: string): string[] {

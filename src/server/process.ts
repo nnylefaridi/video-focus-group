@@ -10,6 +10,7 @@ import { getProfile } from "@/experts/load";
 import { getReview, reviewDir, updateReview } from "./reviews";
 import { enqueue } from "./jobs";
 import { isHosted } from "./config";
+import { dropRawUpload } from "./intake";
 import { onReservation, reservationForRun, settleReservation } from "./credits";
 
 function originalFile(dir: string): string {
@@ -92,6 +93,8 @@ export async function processReview(id: string) {
     await updateReview(id, { ledger });
     // Analysis is saved: the upload as sent (often 100+ MB) and the speech audio aren't needed again.
     for (const f of fs.readdirSync(dir)) if (f.startsWith("original.") || f === "audio.wav") fs.rmSync(path.join(dir, f), { force: true });
+    // Hosted: the raw upload in storage goes too; the converted video is what's kept.
+    await dropRawUpload(r.userId, id);
   }
 
   // 2. Independent reviewer passes. The first warms the shared evidence cache, the rest run in parallel.

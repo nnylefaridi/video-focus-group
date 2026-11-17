@@ -30,16 +30,19 @@ export const MEDIA_DIR = path.join(DATA_DIR, "media");
 export const DB_PATH = path.join(DATA_DIR, "app.db");
 export const WHISPER_MODEL = path.resolve(/* turbopackIgnore: true */ process.env.WHISPER_MODEL ?? path.join(/* turbopackIgnore: true */ DATA_DIR, "models", "ggml-base.en.bin"));
 
-export const LIMITS = {
-  maxBytes: 250 * 1024 * 1024,
-  maxDurationSec: 180,
-  minDurationSec: 1,
-  maxDimension: 4096,
-};
-
 const num = (v: string | undefined, fallback: number) => {
   const n = Number(v);
   return Number.isFinite(n) && n > 0 ? n : fallback;
+};
+
+/** The biggest upload in megabytes (MAX_UPLOAD_MB, default 250). The only upload setting the browser is told. */
+export const MAX_UPLOAD_MB = Math.floor(num(process.env.MAX_UPLOAD_MB, 250));
+
+export const LIMITS = {
+  maxBytes: MAX_UPLOAD_MB * 1024 * 1024,
+  maxDurationSec: 180,
+  minDurationSec: 1,
+  maxDimension: 4096,
 };
 
 /** Spending protection for your API key. Override any of these in .env.local. */
