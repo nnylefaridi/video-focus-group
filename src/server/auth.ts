@@ -6,6 +6,7 @@ import { authReady, SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from "@/lib/supabas
 export { authReady };
 import { canAccess, claimAnonymous, getReview, type ReviewRecord } from "./reviews";
 import { enqueue } from "./jobs";
+import { kickNow } from "./kick";
 import { isHosted } from "./config";
 
 export async function supabaseServer() {
@@ -65,7 +66,9 @@ export async function ensureAnonId(viewer: Viewer): Promise<string> {
 export async function claimForViewer(viewer: Viewer) {
   if (!viewer.userId || !viewer.anonId) return;
   const claimed = await claimAnonymous(viewer.userId, viewer.anonId);
-  for (const r of claimed) if (r.stage === "done") await enqueue(r.id, "store");
+  const finished = claimed.filter((r) => r.stage === "done");
+  for (const r of finished) await enqueue(r.id, "store");
+  if (finished.length) kickNow();
 }
 
 /**

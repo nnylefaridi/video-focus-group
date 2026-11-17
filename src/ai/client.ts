@@ -51,7 +51,7 @@ async function anthropicFor(reviewId: string | null): Promise<Caller> {
   return { client: new Anthropic({ apiKey: k.key.reveal(), authToken: null }), ownKeyOf: k.userId, paidWith: "own_key" };
 }
 
-/** The worker checks a review's key before starting, so a missing one fails before any media work. */
+/** The runner checks a review's key before starting, so a missing one fails before any media work. */
 export async function checkReviewKey(reviewId: string): Promise<void> {
   await anthropicFor(reviewId);
 }

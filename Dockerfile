@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
-# One image for both the website (`app` process) and the background worker (`worker` process).
-# The process is chosen by the host (fly.toml). Build: see docs/hosting.md.
+# One image, one process: Next.js's standalone server.js, which also makes the reviews
+# (src/server/runner.ts runs inside it; there's no separate worker). Build: see docs/hosting.md.
 
 # ---- whisper.cpp (speech to text), built from a pinned release, plus its model ----
 FROM node:22-bookworm-slim AS whisper
@@ -31,6 +31,7 @@ ARG NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
 ENV NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL \
     NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=$NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY \
     PANEL_MODE=hosted \
+    PANEL_STANDALONE=1 \
     NEXT_TELEMETRY_DISABLED=1
 RUN npm run build
 
@@ -43,19 +44,22 @@ COPY --from=whisper /out/whisper-cli /usr/local/bin/whisper-cli
 COPY --from=whisper /out/models /opt/models
 
 WORKDIR /app
-# Dev dependencies stay: next.config.ts and the worker (tsx) need TypeScript tooling at run time.
-COPY --from=build --chown=node:node /app /app
+# The standalone build is self-contained: server.js plus only the packages it uses. The static
+# files and public/ sit beside it, as Next.js's output docs describe.
+COPY --from=build --chown=node:node /app/.next/standalone ./
+COPY --from=build --chown=node:node /app/.next/static ./.next/static
+COPY --from=build --chown=node:node /app/public ./public
 RUN mkdir -p /tmp/panel-data && chown node:node /tmp/panel-data
 
+# HOSTNAME is what server.js listens on. Docker sets it to the container's id unless it's set here.
 ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \
     PANEL_MODE=hosted \
-    HOST=0.0.0.0 \
+    HOSTNAME=0.0.0.0 \
     PORT=8080 \
     DATA_DIR=/tmp/panel-data \
     WHISPER_MODEL=/opt/models/ggml-base.en.bin \
     WHISPER_BIN=/usr/local/bin/whisper-cli
 USER node
 EXPOSE 8080
-# Default is the website; the worker process runs: node --import tsx worker/index.mts
-CMD ["node", "server.mjs"]
+CMD ["node", "server.js"]

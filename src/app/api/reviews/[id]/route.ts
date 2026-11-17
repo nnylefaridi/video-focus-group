@@ -5,6 +5,7 @@ import { deleteReview, reviewDir, type ReviewRecord } from "@/server/reviews";
 import { signedMediaUrl } from "@/server/media";
 import { storedMediaUrls } from "@/server/storage";
 import { accessibleReview } from "@/server/auth";
+import { kickIfUnattended } from "@/server/kick";
 import { getProfile, toCard } from "@/experts/load";
 import { STAGE_LABELS } from "@/core/review";
 import type { ReviewView, PrincipleRef } from "@/core/view";
@@ -33,6 +34,9 @@ export async function GET(_req: Request, ctx: RouteContext<"/api/reviews/[id]">)
   const found = await accessibleReview(id);
   if (!found) return Response.json({ error: "Not found" }, { status: 404 });
   const r = found.review;
+  // The room polls this while a review runs, which doubles as a wake-up: if nothing in this
+  // process is running it (the host slept or restarted), the runner picks it up.
+  kickIfUnattended(r.id, r.stage);
   const media = await mediaResolver(r);
 
   const profiles = r.board.map((rid) => getProfile(rid)).filter((p) => p !== null);

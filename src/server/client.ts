@@ -1,22 +1,30 @@
 import crypto from "node:crypto";
-import { mediaSecret } from "./config";
+import { isHosted, mediaSecret } from "./config";
+import { forwardedClient, trustedProxyCount } from "./mode.mjs";
 
 /**
  * Who is calling, for per-person limits: the visitor's IP address, so every tab,
  * window and browser on one connection shares one allowance.
  *
- * The address is the one server.mjs read from the connection itself (under a
- * header name that's random per run, so a request can't supply its own), or, when
- * CLIENT_IP_HEADER is set, a header your host overwrites on every request (e.g.
- * cf-connecting-ip on Cloudflare, fly-client-ip on Fly). Without either, everyone
- * shares one allowance rather than anyone getting around it.
+ * Local mode is one person on their own computer (it listens on 127.0.0.1), so every
+ * request is the one local client and no header is read: nothing a request sends can
+ * change whose allowance it uses.
+ * Hosted mode needs the host's help, since every request arrives from its proxy:
+ *  - CLIENT_IP_HEADER: a header the host overwrites on every request (e.g. cf-connecting-ip
+ *    on Cloudflare, fly-client-ip on Fly). Only that header is read.
+ *  - TRUSTED_PROXIES=N: the host has N proxies in front of Panel that each append to
+ *    X-Forwarded-For. The address the outermost one saw is used (the Nth entry from the
+ *    right); anything further left was written by the visitor and is never used.
+ * With neither (hosted mode refuses to start without one), everyone shares one allowance
+ * rather than anyone getting around it.
  * IPv6 addresses are grouped by their /64 network, since one household or phone
  * usually gets a whole /64. Only a keyed hash is stored, never the address.
  */
 export function clientIp(headers: Headers): string {
-  const name = process.env.CLIENT_IP_HEADER?.trim().toLowerCase() || process.env.PANEL_PEER_HEADER;
-  const raw = name ? headers.get(name)?.split(",")[0] : null;
-  return normalizeIp(raw?.trim() || "unknown");
+  if (!isHosted()) return "local";
+  const name = process.env.CLIENT_IP_HEADER?.trim().toLowerCase();
+  if (name) return normalizeIp(headers.get(name)?.split(",")[0]?.trim() || "unknown");
+  return normalizeIp(forwardedClient(headers.get("x-forwarded-for"), trustedProxyCount(process.env)));
 }
 
 export function normalizeIp(ip: string): string {

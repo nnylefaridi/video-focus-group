@@ -1,5 +1,5 @@
 // Which way this copy of Panel runs, and what that way needs before it starts.
-// Plain JavaScript so server.mjs, the start scripts, the worker and the app share one copy.
+// Plain JavaScript so the start scripts, the startup check (src/instrumentation.ts) and the app share one copy.
 //   local   (the default) one person on their own computer, listening on 127.0.0.1
 //   hosted  (PANEL_MODE=hosted) a public site behind a host's proxy, with sign-in required
 import fs from "node:fs";
@@ -152,11 +152,11 @@ export function checkStartup(env) {
   const lines = ["Panel can't start in hosted mode (PANEL_MODE=hosted)."];
   if (missing.length) lines.push("These settings are missing:", ...missing.map((k) => `  - ${k}`));
   if (invalid.length) lines.push("These settings need fixing:", ...invalid.map((k) => `  - ${k}`));
-  lines.push("Set them in your host's environment (on Fly: fly secrets set NAME=value). The hosted section of .env.example explains each one.");
+  lines.push("Set them in your host's environment (on Render: the service's Environment tab; on Fly: fly secrets set NAME=value). The hosted section of .env.example explains each one.");
   throw new StartupError(lines.join("\n"));
 }
 
-/** For the scripts that start Panel: checks the settings, or prints why it can't start and exits. */
+/** For the scripts that start Panel and the startup check: checks the settings, or prints why it can't start and exits. */
 export function exitUnlessReady(env) {
   try {
     return checkStartup(env).mode;
@@ -182,15 +182,17 @@ export function trustedProxyCount(env) {
 }
 
 /**
- * The visitor's address: the TCP peer, or with trusted proxies in front, the address the
- * nearest of them saw. Entries further left in X-Forwarded-For were written by whoever
- * sent the request, so they're never used.
+ * The visitor's address from X-Forwarded-For, with `trustedProxies` proxies in front of Panel
+ * that each append the address they received the request from. Counting from the right, the
+ * Nth entry is the one the outermost trusted proxy saw; everything to its left was written by
+ * whoever sent the request, so it's never used. With fewer entries than trusted proxies
+ * (the setting doesn't match the host), or none trusted, there's no safe answer: "unknown".
  */
-export function peerAddress(forwardedFor, socketAddress, trustedProxies) {
+export function forwardedClient(forwardedFor, trustedProxies) {
   const chain = String(forwardedFor ?? "")
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean);
-  chain.push(socketAddress ?? "unknown");
-  return chain[Math.max(0, chain.length - 1 - trustedProxies)];
+  const at = chain.length - trustedProxies;
+  return trustedProxies > 0 && at >= 0 && at < chain.length ? chain[at] : "unknown";
 }

@@ -19,17 +19,31 @@ For each frame, report only what is visible in that still:
 - productVisible: true/false if the video is an ad and a product could be on screen; null if not an ad.
 Be neutral and factual. Do not judge quality. Do not invent anything you cannot see.`;
 
+/** Identifies this exact set of frames, so batches saved for it are only reused for it. */
+export function perceptionKey(frames: Frame[]): string {
+  return frames.map((f) => `${f.id}@${f.t.toFixed(2)}`).join(",");
+}
+
 export async function perceiveFrames(
   reviewId: string,
   dir: string,
   frames: Frame[],
-  ctx: { intent: IntentFields; transcript: Ledger["transcript"] },
+  ctx: {
+    intent: IntentFields;
+    transcript: Ledger["transcript"];
+    /** Batches (by position) already described by an earlier run that was cut short: not paid for again. */
+    saved?: Record<string, FramePerception[]>;
+    /** Called as each batch finishes, so the caller can save it. */
+    onBatch?: (index: number, perceptions: FramePerception[]) => Promise<void>;
+  },
 ): Promise<FramePerception[]> {
   const batches: Frame[][] = [];
   for (let i = 0; i < frames.length; i += 16) batches.push(frames.slice(i, i + 16));
   const transcript = ctx.transcript.map((s) => `[${s.start.toFixed(1)}–${s.end.toFixed(1)}s] ${s.text}`).join("\n") || "(no speech)";
 
   const results = await mapLimit(batches, 3, async (batch, bi) => {
+    const kept = ctx.saved?.[String(bi)];
+    if (kept) return kept;
     const content: Anthropic.Beta.BetaContentBlockParam[] = [
       {
         type: "text",
@@ -51,7 +65,9 @@ export async function perceiveFrames(
       schema: Out,
     });
     const ids = new Set(batch.map((f) => f.id));
-    return out.frames.filter((p) => ids.has(p.frameId));
+    const described = out.frames.filter((p) => ids.has(p.frameId));
+    await ctx.onBatch?.(bi, described);
+    return described;
   });
   return results.flat();
 }

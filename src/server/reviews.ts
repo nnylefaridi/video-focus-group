@@ -5,7 +5,7 @@ import { one, q, tx } from "./db";
 import { isHosted, MEDIA_DIR } from "./config";
 import type { Answer } from "@/core/questionnaire/engine";
 import type { IntentFields } from "@/core/intent";
-import type { Ledger } from "@/core/evidence";
+import type { FramePerception, Ledger } from "@/core/evidence";
 import type { ReviewerNotes, ReviewStage, StoredTurn, Synthesis } from "@/core/review";
 import { isPaymentMethod, type PaymentMethod } from "./billing";
 import { settleOpenReservations } from "./credits";
@@ -18,6 +18,9 @@ export type VideoMeta = {
   height: number;
   hasAudio: boolean;
 };
+
+/** Frame descriptions saved batch by batch (keyed by position) for one exact set of frames (perceptionKey). */
+export type Draft = { perception?: { key: string; batches: Record<string, FramePerception[]> } };
 
 export type Cost = { usd: number; calls: { label: string; model: string; usd: number; inTok: number; outTok: number }[] };
 
@@ -42,6 +45,8 @@ export type ReviewRecord = {
   validation: Record<string, { dropped: string[]; fixed: string[] }> | null;
   cost: Cost;
   storedFiles: string[];
+  /** Paid work already done for a stage that hasn't finished, kept so a restart doesn't repeat it. Null once the stage is saved. */
+  draft: Draft | null;
   /** Hosted mode: how the review is paid for, fixed when it starts. Null: the server's own key. */
   paidWith: PaymentMethod | null;
 };
@@ -73,6 +78,7 @@ function fromRow(r: Row): ReviewRecord {
     validation: json<ReviewRecord["validation"]>(r.validation),
     cost: json<Cost>(r.cost) ?? { usd: 0, calls: [] },
     storedFiles: json<string[]>(r.stored_files) ?? [],
+    draft: json<Draft>(r.draft),
     paidWith: isPaymentMethod(r.paid_with) ? r.paid_with : null,
   };
 }
@@ -167,6 +173,7 @@ const COLUMNS = {
   validation: "validation",
   cost: "cost",
   storedFiles: "stored_files",
+  draft: "draft",
 } as const;
 const TEXT_COLUMNS = new Set(["stage", "stage_detail", "error"]);
 

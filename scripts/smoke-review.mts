@@ -1,13 +1,16 @@
 /**
- * Runs one real video through the full pipeline using the running worker, then prints a summary.
+ * Runs one real video through the full pipeline, then prints a summary. The review is made
+ * right here, by the same in-process runner the website uses (src/server/runner.ts).
  *   npm run smoke -- path/to/video.mp4 [reviewer-id ...] [--email you@example.com]
- * Defaults to a comedy-skit board. Requires `npm run dev` (or `npm run worker`) to be running.
+ * Defaults to a comedy-skit board. Needs the database: keep `npm run dev` running (it starts the
+ * built-in one), or set DATABASE_URL. If the website is running too, either of them may take the job.
  * With --email the review goes into that account, so you can open it in the app.
  */
 import fs from "node:fs";
 import path from "node:path";
 import { createReview, newReviewId, reviewDir, updateReview, getReview } from "../src/server/reviews";
 import { enqueue } from "../src/server/jobs";
+import { getRunner } from "../src/server/runner";
 import { one } from "../src/server/db";
 import { probe, sniffContainer } from "../src/media/probe";
 
@@ -39,6 +42,7 @@ fs.mkdirSync(reviewDir(id), { recursive: true });
 fs.copyFileSync(src, path.join(reviewDir(id), `original.${container}`));
 await updateReview(id, { stage: "queued", video: { originalName: path.basename(src), bytes: fs.statSync(src).size, ...meta } });
 await enqueue(id, "process");
+await getRunner().kick();
 const accounts = Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL);
 console.log(userId || !accounts ? `Review ${id} queued. Open http://127.0.0.1:3000/r/${id}` : `Review ${id} queued (pass --email to open it in your account).`);
 
@@ -57,6 +61,7 @@ while (Date.now() - t0 < 15 * 60 * 1000) {
     const obs = Object.values(r.notes ?? {}).reduce((n, x) => n + x.observations.length, 0);
     console.log(`Done: ${r.ledger?.frames.length} frames, ${obs} observations, ${r.discussion?.length} turns, $${r.cost.usd.toFixed(3)}`);
     console.log(`Validation: ${JSON.stringify(r.validation)}`);
+    await getRunner().idle();
     process.exit(0);
   }
   await new Promise((res) => setTimeout(res, 1000));

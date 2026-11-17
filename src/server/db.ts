@@ -63,7 +63,7 @@ const MIGRATIONS = path.join(/* turbopackIgnore: true */ process.cwd(), "supabas
 
 async function migrate(d: Driver) {
   await d.tx(async (t) => {
-    // Web app and worker may start at once; only one applies migrations.
+    // Several processes may start at once (or a script beside the app); only one applies migrations.
     await t.q("select pg_advisory_xact_lock(724100)");
     await t.exec(
       "create schema if not exists app; create table if not exists app.migrations (name text primary key, at bigint not null); alter table app.migrations enable row level security",

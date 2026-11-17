@@ -7,6 +7,9 @@ import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("next/server", async (importOriginal) => ({ ...(await importOriginal<typeof import("next/server")>()), connection: async () => {} }));
+// Waking the runner is covered in runner.test.ts; here it must only be asked for, after the answer.
+const kick = vi.hoisted(() => vi.fn());
+vi.mock("@/server/kick", () => ({ kickAfterResponse: kick }));
 
 const read = (f: string) => fs.readFileSync(path.join(process.cwd(), f), "utf8");
 
@@ -17,6 +20,13 @@ describe("GET /api/health", () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true });
     expect(res.headers.get("cache-control")).toBe("no-store");
+  });
+
+  it("wakes the review runner once it has answered, so a host that slept resumes unfinished reviews", async () => {
+    kick.mockClear();
+    const { GET } = await import("@/app/api/health/route");
+    await GET();
+    expect(kick).toHaveBeenCalledTimes(1);
   });
 
   it("isn't run through the sign-in proxy", async () => {
@@ -42,8 +52,26 @@ describe("Dockerfile, fly.toml and .dockerignore", () => {
   it("runs as a non-root user in hosted mode on 0.0.0.0:8080", () => {
     expect(docker).toMatch(/^USER node$/m);
     expect(docker).toContain("PANEL_MODE=hosted");
-    expect(docker).toContain("HOST=0.0.0.0");
+    // Docker sets HOSTNAME to the container's id, which server.js would listen on, so it's set explicitly.
+    expect(docker).toMatch(/HOSTNAME=0\.0\.0\.0/);
     expect(docker).toContain("PORT=8080");
+  });
+
+  it("builds and runs Next.js's standalone server.js, with no separate worker or custom server", () => {
+    expect(docker).toMatch(/PANEL_STANDALONE=1/);
+    expect(docker).toContain("/app/.next/standalone");
+    expect(docker).toContain("/app/.next/static");
+    expect(docker).toMatch(/^CMD \["node", "server\.js"\]$/m);
+    expect(docker).not.toMatch(/server\.mjs|worker\/index|--import tsx/);
+    expect(fs.existsSync(path.join(process.cwd(), "server.mjs"))).toBe(false);
+  });
+
+  it("sets output: standalone only for that build, and keeps what is read with fs in the trace", () => {
+    const config = read("next.config.ts");
+    expect(config).toMatch(/output: process\.env\.PANEL_STANDALONE === "1" \? "standalone" : undefined/);
+    expect(config).toContain("./src/experts/profiles/**");
+    expect(config).toContain("./supabase/migrations/**");
+    expect(config).toMatch(/skipProxyUrlNormalize: true/);
   });
 
   it("passes only the public Supabase settings as build arguments", () => {
@@ -51,15 +79,20 @@ describe("Dockerfile, fly.toml and .dockerignore", () => {
     expect(args.filter((a) => !a.startsWith("WHISPER_"))).toEqual(["NEXT_PUBLIC_SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"]);
   });
 
-  it("gives the website a public, health-checked service and the worker none", () => {
+  it("gives the one process a public, health-checked service, with no worker process group", () => {
     expect(fly).toMatch(/internal_port = 8080/);
     expect(fly).toMatch(/force_https = true/);
     expect(fly).toMatch(/path = "\/api\/health"/);
     expect(fly).toMatch(/CLIENT_IP_HEADER = "Fly-Client-IP"/);
-    expect(fly).toMatch(/app = "node server\.mjs"/);
-    expect(fly).toMatch(/worker = "node --import tsx worker\/index\.mts"/);
-    expect(fly).toMatch(/processes = \["app"\]\n\s+internal_port/);
+    expect(fly).not.toMatch(/^\[processes\]/m);
+    expect(fly.replace(/^\s*#.*$/gm, "")).not.toMatch(/worker/);
     expect(fly.match(/^\[http_service\]/gm)).toHaveLength(1);
+    expect(fly.match(/^\[\[vm\]\]/gm)).toHaveLength(1);
+  });
+
+  it("keeps the machine on while a review runs inside it with nobody visiting", () => {
+    expect(fly).toMatch(/auto_stop_machines = "off"/);
+    expect(fly).toMatch(/min_machines_running = 1/);
   });
 
   it("keeps secrets and local data out of the image, and public/ in", () => {

@@ -4,13 +4,14 @@
  * existing rows are skipped. Run it while `npm run dev` is running.
  *   npm run db:import-local                              local mode (no accounts)
  *   npm run db:import-local -- --email you@example.com   with Supabase: into that account,
- *                                                        and the worker copies their media to storage
+ *                                                        and their media is copied to storage
  */
 import fs from "node:fs";
 import path from "node:path";
 import Database from "better-sqlite3";
 import { one, tx } from "../src/server/db";
 import { enqueue } from "../src/server/jobs";
+import { getRunner } from "../src/server/runner";
 import { DATA_DIR } from "../src/server/config";
 
 const args = process.argv.slice(2);
@@ -60,9 +61,16 @@ const imported = await tx(async (t) => {
   return ids;
 });
 if (user.id) for (const id of imported) await enqueue(id, "store");
+if (user.id && imported.length) {
+  // Copy their media to storage right here, with the same runner the website uses.
+  console.log("Copying their media to storage…");
+  const runner = getRunner();
+  await runner.kick();
+  await runner.idle();
+}
 console.log(
   user.id
-    ? `Imported ${imported.length} review(s) into ${email}${imported.length ? "; the worker is copying their media to storage" : ""}.`
+    ? `Imported ${imported.length} review(s) into ${email}${imported.length ? " and copied their media to storage" : ""}.`
     : `Imported ${imported.length} review(s). They're on Your reviews.`,
 );
 process.exit(0);

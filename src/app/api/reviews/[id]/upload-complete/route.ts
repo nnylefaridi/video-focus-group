@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { LIMITS, MAX_UPLOAD_MB } from "@/server/config";
 import { enqueue } from "@/server/jobs";
+import { kickAfterResponse } from "@/server/kick";
 import { ownedUploadReview } from "@/server/intake";
 import { deleteReview, updateReview } from "@/server/reviews";
 import { uploadedSize } from "@/server/storage";
@@ -9,7 +10,7 @@ const Body = z.object({ name: z.string().max(200).optional() });
 
 /**
  * Hosted mode: the browser says the video is in storage. We confirm it really is there and
- * within the size limit, then queue it. The worker checks what's inside (type, length,
+ * within the size limit, then queue it. The runner checks what's inside (type, length,
  * shape) before any reviewing starts.
  */
 export async function POST(req: Request, ctx: RouteContext<"/api/reviews/[id]/upload-complete">) {
@@ -39,5 +40,6 @@ export async function POST(req: Request, ctx: RouteContext<"/api/reviews/[id]/up
 
   await updateReview(id, { stage: "queued" });
   await enqueue(id, "process", { name: body.success ? body.data.name : undefined });
+  kickAfterResponse();
   return Response.json({ ok: true });
 }

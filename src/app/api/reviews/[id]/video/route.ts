@@ -7,6 +7,7 @@ import { isHosted, LIMITS, MAX_UPLOAD_MB } from "@/server/config";
 import { deleteReview, reviewDir, updateReview } from "@/server/reviews";
 import { accessibleReview, mustSignIn, signInResponse } from "@/server/auth";
 import { enqueue } from "@/server/jobs";
+import { kickAfterResponse } from "@/server/kick";
 import { probe, sniffContainer, UploadRejected } from "@/media/probe";
 
 class TooLarge extends Error {}
@@ -56,6 +57,7 @@ export async function PUT(req: Request, ctx: RouteContext<"/api/reviews/[id]/vid
       video: { originalName: name, bytes, durationSec: meta.durationSec, width: meta.width, height: meta.height, hasAudio: meta.hasAudio },
     });
     await enqueue(id, "process");
+    kickAfterResponse();
     return Response.json({ ok: true });
   } catch (e) {
     if (e instanceof TooLarge) return reject(`That file is larger than ${MAX_UPLOAD_MB} MB.`, 413);

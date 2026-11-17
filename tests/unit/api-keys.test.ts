@@ -23,7 +23,9 @@ process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY = "sb_publishable_test";
 process.env.HOSTED_PUBLIC_URL = "https://panel.example.com";
 process.env.KEY_ENCRYPTION_SECRET = SECRET;
 process.env.ANTHROPIC_API_KEY = "sk-ant-server-key-for-tests-0000";
-process.env.PANEL_PEER_HEADER = "x-panel-peer-test";
+process.env.CLIENT_IP_HEADER = "x-panel-peer-test";
+// Waking the runner needs a request to run after; runner.test.ts covers the runner itself.
+vi.mock("@/server/kick", () => ({ kickAfterResponse: () => {}, kickNow: () => {}, kickIfUnattended: () => {} }));
 process.env.MAX_KEY_CHECKS_PER_HOUR = "3";
 process.env.MAX_REVIEWS_PER_DAY = "2";
 
@@ -527,7 +529,7 @@ describe("every paid call for a review goes through the review's key", () => {
         else if (/\.(ts|tsx|mts|mjs|js)$/.test(e.name) && !/\.test\.ts$/.test(e.name)) files.push(p);
       }
     };
-    for (const dir of ["src", "worker", "scripts"]) walk(path.join(ROOT, dir));
+    for (const dir of ["src", "scripts"]) walk(path.join(ROOT, dir));
     const read = (p: string) => fs.readFileSync(p, "utf8");
     const found = files.flatMap((p) => {
       const hits = read(p).match(/new\s+Anthropic\s*\(/g);

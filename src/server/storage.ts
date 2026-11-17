@@ -79,7 +79,7 @@ export async function removeUpload(userId: string, reviewId: string): Promise<vo
 
 /** The files a finished review needs: the playable video, poster, captions and every sampled frame. */
 function localMediaFiles(dir: string): string[] {
-  const files = ["video.mp4", "poster.jpg", "captions.vtt"].filter((f) => fs.existsSync(path.join(dir, f)));
+  const files = ["video.mp4", "poster.jpg", "captions.vtt"].filter((f) => fs.existsSync(/* turbopackIgnore: true */ path.join(/* turbopackIgnore: true */ dir, f)));
   const frames = path.join(dir, "frames");
   if (fs.existsSync(frames)) files.push(...fs.readdirSync(frames).filter((f) => /^F\d{3,4}\.jpg$/.test(f)).map((f) => `frames/${f}`));
   return files;

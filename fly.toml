@@ -1,5 +1,5 @@
 # Fly.io config for the hosted site. See docs/hosting.md for the full launch steps.
-# `app` is the website; `worker` makes the reviews. Both run the same image.
+# One process does everything: the website, and (inside it) the review runner.
 app = "video-focus-group"      # change to a name that's free on Fly (fly launch --no-deploy can pick one)
 primary_region = "yyz"         # Toronto; pick the region closest to your Supabase project
 
@@ -10,24 +10,21 @@ primary_region = "yyz"         # Toronto; pick the region closest to your Supaba
 
 [env]
   PANEL_MODE = "hosted"
-  HOST = "0.0.0.0"
+  # server.js listens on HOSTNAME (set in the Dockerfile) and PORT.
   PORT = "8080"
   # Fly's proxy overwrites Fly-Client-IP with the visitor's address on every request.
   CLIENT_IP_HEADER = "Fly-Client-IP"
   # One proxy (Fly's) is in front of the website.
   TRUSTED_PROXIES = "1"
 
-[processes]
-  app = "node server.mjs"
-  worker = "node --import tsx worker/index.mts"
-
 [http_service]
-  processes = ["app"]
   internal_port = 8080
   force_https = true
-  auto_stop_machines = "stop"
+  # A review runs inside this process for several minutes after the upload finishes, with
+  # nobody visiting. Fly stops a machine that has had no traffic, so it stays on.
+  auto_stop_machines = "off"
   auto_start_machines = true
-  min_machines_running = 0
+  min_machines_running = 1
 
   [[http_service.checks]]
     method = "GET"
@@ -37,14 +34,7 @@ primary_region = "yyz"         # Toronto; pick the region closest to your Supaba
     timeout = "5s"
     grace_period = "20s"
 
-# The worker has no [http_service]: nothing on the internet can reach it. It must stay on
-# so it keeps picking up uploaded videos, so it never auto-stops.
+# Until video preparation moves into the browser, the machine also runs ffmpeg and whisper.
 [[vm]]
-  processes = ["app"]
-  size = "shared-cpu-1x"
-  memory = "1gb"
-
-[[vm]]
-  processes = ["worker"]
   size = "shared-cpu-2x"
   memory = "2gb"

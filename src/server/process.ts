@@ -4,7 +4,7 @@ import type { Coverage, Ledger } from "@/core/evidence";
 import type { ReviewerNotes } from "@/core/review";
 import { probe } from "@/media/probe";
 import { audioSignals, denseSample, detectShots, normalize, sampleFrames, transcribe, writeCaptions } from "@/media/pipeline";
-import { perceiveFrames } from "@/ai/perceive";
+import { perceiveFrames, perceptionKey } from "@/ai/perceive";
 import { composeDiscussion, evidenceBlocks, reviewerPass, synthesize } from "@/ai/review";
 import { getProfile } from "@/experts/load";
 import { getReview, reviewDir, updateReview } from "./reviews";
@@ -40,7 +40,7 @@ function coverage(p: { durationSec: number; width: number; height: number; hasAu
 }
 
 /**
- * The worker's way in. On prepaid credits (hosted mode) every paid call runs on the
+ * The runner's way in (src/server/runner.ts). On prepaid credits (hosted mode) every paid call runs on the
  * credit set aside for this run; finished or failed, the run is then charged what its
  * calls cost plus the margin, and the rest is released. Otherwise it's processReview.
  */
@@ -86,11 +86,22 @@ export async function processReview(id: string) {
     const signals = await audioSignals(dir, p.durationSec, transcript);
 
     await stage("perceiving", `${frames.length} frames`);
-    const perception = await perceiveFrames(id, dir, frames, { intent: r.intent, transcript });
+    // Each batch is saved as it's paid for, so a restart only repeats the batches that were in flight.
+    const key = perceptionKey(frames);
+    const batches = r.draft?.perception?.key === key ? { ...r.draft.perception.batches } : {};
+    const perception = await perceiveFrames(id, dir, frames, {
+      intent: r.intent,
+      transcript,
+      saved: batches,
+      onBatch: async (index, described) => {
+        batches[String(index)] = described;
+        await updateReview(id, { draft: { perception: { key, batches } } });
+      },
+    });
 
     const partial = { shots, frames, transcript, ...signals, perception };
     ledger = { ...partial, coverage: coverage(p, partial) };
-    await updateReview(id, { ledger });
+    await updateReview(id, { ledger, draft: null });
     // Analysis is saved: the upload as sent (often 100+ MB) and the speech audio aren't needed again.
     for (const f of fs.readdirSync(dir)) if (f.startsWith("original.") || f === "audio.wav") fs.rmSync(path.join(dir, f), { force: true });
     // Hosted: the raw upload in storage goes too; the converted video is what's kept.

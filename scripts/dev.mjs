@@ -1,33 +1,5 @@
-// Starts the web app and the background worker together; Ctrl+C stops both.
-// Without DATABASE_URL in .env.local, it also runs the built-in local database.
-import { spawn } from "node:child_process";
-import { LocalDatabaseError, startLocalDatabase, wantsLocalDatabase } from "./local-db.mjs";
-import { exitUnlessReady, startupEnv } from "../src/server/mode.mjs";
+// `npm run dev`: the website in development, with the built-in local database when DATABASE_URL isn't set.
+// Reviews are made inside the website's own process; Ctrl+C stops everything.
+import { serve } from "./serve.mjs";
 
-// Hosted mode (PANEL_MODE=hosted) needs its settings first, and its own database.
-const mode = exitUnlessReady(startupEnv(process.cwd(), "development"));
-const db = mode === "local" && wantsLocalDatabase()
-  ? await startLocalDatabase().catch((e) => {
-      console.error(`\n${e instanceof LocalDatabaseError ? e.message : e}\n`);
-      process.exit(1);
-    })
-  : null;
-if (db) process.env.DATABASE_URL = db.url;
-
-const procs = [
-  // In local mode, bound to this computer only (see server.mjs), so nobody else on your network can use your API key.
-  spawn("node", ["server.mjs", "--dev"], { stdio: "inherit" }),
-  spawn("npx", ["tsx", "watch", "--env-file-if-exists=.env.local", "worker/index.mts"], { stdio: "inherit" }),
-];
-let stopping = false;
-async function stop(code = 0) {
-  if (stopping) return;
-  stopping = true;
-  procs.forEach((p) => p.kill("SIGINT"));
-  await Promise.all(procs.map((p) => (p.exitCode === null ? new Promise((r) => p.once("exit", r)) : null)));
-  await db?.stop().catch(() => {});
-  process.exit(code);
-}
-process.on("SIGINT", () => stop());
-process.on("SIGTERM", () => stop());
-procs.forEach((p) => p.on("exit", (code) => code && code !== 0 && stop(code)));
+await serve({ dev: true });

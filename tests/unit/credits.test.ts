@@ -24,7 +24,9 @@ process.env.ANTHROPIC_API_KEY = "sk-ant-server-key-for-tests-0000";
 process.env.STRIPE_SECRET_KEY = "sk_test_not_a_real_key";
 process.env.STRIPE_WEBHOOK_SECRET = WEBHOOK_SECRET;
 process.env.KEY_ENCRYPTION_SECRET = Buffer.alloc(32, 5).toString("base64");
-process.env.PANEL_PEER_HEADER = "x-panel-peer-test";
+process.env.CLIENT_IP_HEADER = "x-panel-peer-test";
+// Waking the runner needs a request to run after; runner.test.ts covers the runner itself.
+vi.mock("@/server/kick", () => ({ kickAfterResponse: () => {}, kickNow: () => {}, kickIfUnattended: () => {} }));
 process.env.MAX_REVIEWS_PER_DAY = "50";
 process.env.MAX_REVIEWS_PER_NETWORK_PER_DAY = "500";
 process.env.DAILY_LIMIT_USD = "1000";

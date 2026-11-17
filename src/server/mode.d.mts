@@ -15,4 +15,4 @@ export function checkStartup(env: Env): { mode: Mode };
 export function exitUnlessReady(env: Env): Mode;
 export function listenAddress(mode: Mode, env: Env): { hostname: string; port: number };
 export function trustedProxyCount(env: Env): number;
-export function peerAddress(forwardedFor: string | string[] | undefined, socketAddress: string | undefined, trustedProxies: number): string;
+export function forwardedClient(forwardedFor: string | null | undefined, trustedProxies: number): string;

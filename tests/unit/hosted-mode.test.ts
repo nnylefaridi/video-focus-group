@@ -7,8 +7,7 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { pathToFileURL } from "node:url";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   canonicalLocation,
   checkStartup,
@@ -17,8 +16,8 @@ import {
   listenAddress,
   mediaSecretOf,
   parseEnvFile,
+  forwardedClient,
   parseMode,
-  peerAddress,
   publicOriginOf,
   readEnvFiles,
   StartupError,
@@ -190,7 +189,7 @@ describe("what hosted mode needs before it starts", () => {
         "These settings are missing:",
         "  - NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
         "  - DATABASE_URL",
-        "Set them in your host's environment (on Fly: fly secrets set NAME=value). The hosted section of .env.example explains each one.",
+        "Set them in your host's environment (on Render: the service's Environment tab; on Fly: fly secrets set NAME=value). The hosted section of .env.example explains each one.",
       ].join("\n"),
     );
   });
@@ -247,26 +246,35 @@ describe("where the website listens", () => {
 });
 
 describe("visitors' addresses behind a proxy", () => {
-  it("ignores X-Forwarded-For unless proxies are trusted", () => {
+  it("counts the trusted proxies from TRUSTED_PROXIES", () => {
     expect(trustedProxyCount({})).toBe(0);
-    expect(peerAddress("6.6.6.6", "203.0.113.9", 0)).toBe("203.0.113.9");
-    expect(peerAddress(undefined, "203.0.113.9", 0)).toBe("203.0.113.9");
+    expect(trustedProxyCount({ TRUSTED_PROXIES: "2" })).toBe(2);
   });
 
-  it("takes the address the nearest trusted proxy saw, never one the visitor wrote", () => {
-    // The visitor sent "6.6.6.6"; Fly's proxy appended the real address.
-    expect(peerAddress("6.6.6.6, 198.51.100.4", "172.16.0.2", trustedProxyCount({ TRUSTED_PROXIES: "1" }))).toBe("198.51.100.4");
-    // More trusted proxies than entries: the leftmost, not something past the end.
-    expect(peerAddress("", "172.16.0.2", 3)).toBe("172.16.0.2");
+  it("never uses X-Forwarded-For when no proxy is trusted", () => {
+    expect(forwardedClient("6.6.6.6", 0)).toBe("unknown");
+    expect(forwardedClient(undefined, 0)).toBe("unknown");
+    expect(forwardedClient(null, 1)).toBe("unknown");
   });
 
-  it("reads Fly-Client-IP when that's the header the host sets", async () => {
+  it("takes the Nth entry from the right, the address the outermost trusted proxy saw, never one the visitor wrote", () => {
+    // The visitor sent "6.6.6.6"; the host's proxy appended the real address.
+    expect(forwardedClient("6.6.6.6, 198.51.100.4", trustedProxyCount({ TRUSTED_PROXIES: "1" }))).toBe("198.51.100.4");
+    expect(forwardedClient("6.6.6.6, 198.51.100.4, 10.0.0.9", 2)).toBe("198.51.100.4");
+    // More trusted proxies than entries: the setting doesn't match the host, so there's no safe answer.
+    expect(forwardedClient("6.6.6.6", 2)).toBe("unknown");
+    expect(forwardedClient("", 3)).toBe("unknown");
+  });
+
+  it("reads Fly-Client-IP when that's the header the host sets (hosted mode)", async () => {
     const c = await import("@/server/client");
+    process.env.PANEL_MODE = "hosted";
     process.env.CLIENT_IP_HEADER = "Fly-Client-IP";
     try {
       expect(c.clientIp(new Headers({ "fly-client-ip": "198.51.100.4", "x-forwarded-for": "6.6.6.6" }))).toBe("198.51.100.4");
     } finally {
       delete process.env.CLIENT_IP_HEADER;
+      delete process.env.PANEL_MODE;
     }
   });
 });
@@ -279,30 +287,92 @@ describe("starting Panel", () => {
   };
   const missingAll = /These settings are missing:\n {2}- NEXT_PUBLIC_SUPABASE_URL\n {2}- NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY\n {2}- SUPABASE_SECRET_KEY\n {2}- DATABASE_URL\n {2}- HOSTED_PUBLIC_URL\n {2}- KEY_ENCRYPTION_SECRET\n {2}- MEDIA_SECRET\n {2}- STRIPE_SECRET_KEY\n {2}- STRIPE_WEBHOOK_SECRET\n {2}- CLIENT_IP_HEADER \(or TRUSTED_PROXIES\)/;
 
-  it("stops the website, naming what's missing", () => {
-    const r = run([path.join(ROOT, "server.mjs")], { PANEL_MODE: "hosted" });
-    expect(r.status).toBe(1);
-    expect(r.stderr).toMatch(missingAll);
-  });
-
-  it("stops npm start before the built-in database starts", () => {
+  it("stops npm start before the built-in database starts, naming what's missing", () => {
     const r = run([path.join(ROOT, "scripts", "start.mjs")], { PANEL_MODE: "hosted" });
     expect(r.status).toBe(1);
     expect(r.stderr).toMatch(missingAll);
     expect(fs.existsSync(path.join(r.cwd, "data", "pg"))).toBe(false);
   });
 
-  it("stops the worker too", () => {
-    const tsx = pathToFileURL(path.join(ROOT, "node_modules", "tsx", "dist", "loader.mjs")).href;
-    const r = run(["--import", tsx, path.join(ROOT, "worker", "index.mts")], { PANEL_MODE: "hosted", TSX_TSCONFIG_PATH: path.join(ROOT, "tsconfig.json") });
+  it("stops npm run dev the same way", () => {
+    const r = run([path.join(ROOT, "scripts", "dev.mjs")], { PANEL_MODE: "hosted", NODE_ENV: "development" });
     expect(r.status).toBe(1);
     expect(r.stderr).toMatch(missingAll);
+    expect(fs.existsSync(path.join(r.cwd, "data", "pg"))).toBe(false);
   });
 
   it("refuses an unknown mode", () => {
-    const r = run([path.join(ROOT, "server.mjs")], { PANEL_MODE: "prod" });
+    const r = run([path.join(ROOT, "scripts", "start.mjs")], { PANEL_MODE: "prod" });
     expect(r.status).toBe(1);
     expect(r.stderr).toContain('PANEL_MODE is "prod", but it can only be "local" or "hosted"');
+  });
+
+  it("starts nothing without Node's own server: no server.mjs or worker is left to run", () => {
+    expect(fs.existsSync(path.join(ROOT, "server.mjs"))).toBe(false);
+    expect(fs.existsSync(path.join(ROOT, "worker"))).toBe(false);
+    const scripts = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8")).scripts as Record<string, string>;
+    expect(Object.values(scripts).join("\n")).not.toMatch(/server\.mjs|worker/);
+    expect(scripts.dev).toBe("node scripts/dev.mjs");
+    expect(scripts.start).toBe("node scripts/start.mjs");
+    expect(scripts.build).toBe("next build");
+  });
+});
+
+describe("the startup check inside the server (src/instrumentation.ts)", () => {
+  /** Runs bootServer(env) with a process.exit that throws instead of exiting, and reports what it printed. */
+  async function boot(env: Record<string, string>) {
+    const exit = vi.spyOn(process, "exit").mockImplementation(((code?: number) => {
+      throw new Error(`exit ${code}`);
+    }) as never);
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const { bootServer } = await import("@/server/boot");
+      const result = await bootServer(env).then(() => "started", (e: Error) => e.message);
+      return { result, printed: err.mock.calls.map((c) => String(c[0])).join("\n"), exited: exit.mock.calls.map((c) => c[0]) };
+    } finally {
+      exit.mockRestore();
+      err.mockRestore();
+    }
+  }
+
+  it("exits with the list of what's missing when hosted mode isn't set up", async () => {
+    const r = await boot({ PANEL_MODE: "hosted" });
+    expect(r.result).toBe("exit 1");
+    expect(r.exited).toEqual([1]);
+    expect(r.printed).toMatch(/Panel can't start in hosted mode/);
+    expect(r.printed).toMatch(/- MEDIA_SECRET/);
+    expect(r.printed).toMatch(/- CLIENT_IP_HEADER \(or TRUSTED_PROXIES\)/);
+  });
+
+  it("exits on an unknown mode, and when hosted mode has neither CLIENT_IP_HEADER nor TRUSTED_PROXIES", async () => {
+    expect((await boot({ PANEL_MODE: "prod" })).printed).toContain('PANEL_MODE is "prod"');
+    const r = await boot(without("CLIENT_IP_HEADER") as Record<string, string>);
+    expect(r.exited).toEqual([1]);
+    expect(r.printed).toMatch(/These settings are missing:\n {2}- CLIENT_IP_HEADER \(or TRUSTED_PROXIES\)/);
+  });
+
+  it("is run by register() in the server, but not during `next build` (which has no secrets) or in the edge runtime", async () => {
+    const saved = { ...process.env };
+    const exit = vi.spyOn(process, "exit").mockImplementation(((code?: number) => {
+      throw new Error(`exit ${code}`);
+    }) as never);
+    try {
+      const { register } = await import("@/instrumentation");
+      Object.assign(process.env, { PANEL_MODE: "hosted", NEXT_RUNTIME: "nodejs", NEXT_PHASE: "phase-production-build" });
+      await expect(register()).resolves.toBeUndefined();
+      Object.assign(process.env, { NEXT_RUNTIME: "edge", NEXT_PHASE: "phase-production-server" });
+      await expect(register()).resolves.toBeUndefined();
+      expect(exit).not.toHaveBeenCalled();
+      // In the server it checks: hosted mode with nothing set stops the server.
+      Object.assign(process.env, { NEXT_RUNTIME: "nodejs" });
+      for (const k of Object.keys(HOSTED)) if (k !== "PANEL_MODE") delete process.env[k];
+      vi.spyOn(console, "error").mockImplementation(() => {});
+      await expect(register()).rejects.toThrow("exit 1");
+    } finally {
+      vi.restoreAllMocks();
+      for (const k of Object.keys(process.env)) if (!(k in saved)) delete process.env[k];
+      Object.assign(process.env, saved);
+    }
   });
 });
 

@@ -18,7 +18,9 @@ process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY = "sb_publishable_test";
 process.env.HOSTED_PUBLIC_URL = "https://panel.example.com";
 // Only checked for presence; nothing here calls Anthropic.
 process.env.ANTHROPIC_API_KEY = "sk-ant-test-not-used";
-process.env.PANEL_PEER_HEADER = "x-panel-peer-test";
+process.env.CLIENT_IP_HEADER = "x-panel-peer-test";
+// Waking the runner needs a request to run after; runner.test.ts covers the runner itself.
+vi.mock("@/server/kick", () => ({ kickAfterResponse: () => {}, kickNow: () => {}, kickIfUnattended: () => {} }));
 
 const state = vi.hoisted(() => ({ cookies: new Map<string, string>(), user: null as null | { sub: string; email: string } }));
 vi.mock("next/headers", () => ({

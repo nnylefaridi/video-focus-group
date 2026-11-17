@@ -5,6 +5,7 @@ import { reviewDir, updateReview, type ReviewRecord } from "@/server/reviews";
 import { accessibleReview, mustSignIn, signInResponse } from "@/server/auth";
 import { whoIsCalling } from "@/server/client";
 import { enqueue } from "@/server/jobs";
+import { kickNow } from "@/server/kick";
 import { restoreFile } from "@/server/storage";
 import { addMessage, getThread } from "@/server/followups";
 import { getProfile } from "@/experts/load";
@@ -40,7 +41,10 @@ async function inspect(r: ReviewRecord, ledger: Ledger, seconds: number, focus: 
   ledger.perception.push(...perception);
   await updateReview(reviewId, { ledger });
   // New frames join the stored record too.
-  if (r.userId && added.length) await enqueue(reviewId, "store");
+  if (r.userId && added.length) {
+    await enqueue(reviewId, "store");
+    kickNow();
+  }
   // Include frames already sampled in this window too.
   const window = ledger.frames.filter((f) => Math.abs(f.t - t) <= 1.5).sort((a, b) => a.t - b.t);
   const byId = new Map(ledger.perception.map((p) => [p.frameId, p]));

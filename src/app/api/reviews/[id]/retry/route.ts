@@ -1,5 +1,6 @@
 import { setPaidWith, updateReview } from "@/server/reviews";
 import { enqueue } from "@/server/jobs";
+import { kickAfterResponse } from "@/server/kick";
 import { accessibleReview, mustSignIn, signInResponse } from "@/server/auth";
 import { getPaymentContext, paymentResponse } from "@/server/billing";
 import { isHosted } from "@/server/config";
@@ -34,5 +35,6 @@ export async function POST(_req: Request, ctx: RouteContext<"/api/reviews/[id]/r
   }
   await updateReview(id, { stage: "queued", error: null, stageDetail: null });
   await enqueue(id, "process");
+  kickAfterResponse();
   return Response.json({ ok: true });
 }

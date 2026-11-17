@@ -27,6 +27,9 @@ const state = vi.hoisted(() => ({
   issued: [] as string[],
   removed: [] as string[],
 }));
+// Waking the runner needs a request to run after; runner.test.ts covers the runner itself.
+const kick = vi.hoisted(() => vi.fn());
+vi.mock("@/server/kick", () => ({ kickAfterResponse: kick, kickNow: kick, kickIfUnattended: kick }));
 vi.mock("next/headers", () => ({ cookies: async () => ({ get: () => undefined, getAll: () => [], set: () => {} }) }));
 vi.mock("@supabase/ssr", () => ({
   createServerClient: () => ({ auth: { getClaims: async () => ({ data: state.user ? { claims: state.user } : null }) } }),
@@ -80,6 +83,7 @@ beforeEach(() => {
   state.objects.clear();
   state.issued.length = 0;
   state.removed.length = 0;
+  kick.mockClear();
 });
 
 const ctx = (id: string) => ({ params: Promise.resolve({ id }) }) as never;
@@ -144,6 +148,8 @@ describe("saying the upload is complete", () => {
     expect(job?.kind).toBe("process");
     const payload = typeof job!.payload === "string" ? JSON.parse(job!.payload) : job!.payload;
     expect(payload.name).toBe("my cat.mp4");
+    // The response goes out first; then the runner is woken to take the job.
+    expect(kick).toHaveBeenCalledTimes(1);
   });
 
   it("doesn't queue when nothing arrived, and lets them try again", async () => {
@@ -153,6 +159,7 @@ describe("saying the upload is complete", () => {
     expect((await res.json()).error).toMatch(/didn't arrive/);
     expect((await reviews.getReview(id))!.stage).toBe("uploading");
     expect(await db.one("SELECT 1 FROM app.jobs WHERE review_id = $1", [id])).toBeNull();
+    expect(kick).not.toHaveBeenCalled();
   });
 
   it("removes an upload over the size limit and the review with it", async () => {

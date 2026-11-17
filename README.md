@@ -170,7 +170,7 @@ A new review is also refused if less than $1.50 is left in today's or this month
 1. **Questions** adapt to what you're making, and there are never more than five: the most useful one for your kind of video is asked next. Your first free-text answer is read by Claude Haiku, which fills in what it can so you skip questions you've already answered. Every answer can be changed from the board screen.
 2. **Board.** Three reviewers are picked for your niche and goal, including at least one pair who tend to disagree. You can swap, add or remove reviewers. Click any name to see their sourced ideas.
 3. **Upload.** MP4, MOV or WebM, up to 3 minutes and 250 MB. The server checks the actual file contents (not the extension), then normalizes the video and strips its metadata.
-4. **Evidence.** The worker detects cuts, samples frames (densely in the first 3 seconds), transcribes speech with word timings, and measures pauses, silence and sound without speech. Claude Sonnet then describes each frame. Every item gets an id like `F012`, `T03`, `S02` or `A01`.
+4. **Evidence.** Panel detects cuts, samples frames (densely in the first 3 seconds), transcribes speech with word timings, and measures pauses, silence and sound without speech. Claude Sonnet then describes each frame. Every item gets an id like `F012`, `T03`, `S02` or `A01`.
 5. **Review.** Each reviewer (Claude Opus with that person's profile) watches the evidence on their own and must cite evidence ids and their own principle ids. The model never writes timestamps; the app derives them from the cited evidence. Validators drop anything with no evidence, any made-up quote, or any prediction of views or sales.
 6. **The board.** In a paper puppet theatre, each reviewer is a cutout on a popsicle stick behind an origami table. The speaker's puppet wags while their line appears under the flat video player (whose CC button shows captions made from the transcript). The independent notes become a discussion with real disagreements, a comparison of where reviewers agree and differ, and a plan: *change these first*, *worth trying*, *keep these*.
 7. **Ask.** Chat with any reviewer. They can take a closer look at any moment, re-sampling it at 8 frames per second.
@@ -206,7 +206,7 @@ With accounts on:
 ### How it's built
 
 - **Database.** Postgres. Without `DATABASE_URL`, `npm run dev` runs a built-in one (the `embedded-postgres` package, data in `data/pg`, listening only on `127.0.0.1:54329`) and stops it on Ctrl + C. With `DATABASE_URL` set, it uses that database (e.g. Supabase). Tables live in the `app` schema; migrations in `supabase/migrations` apply automatically on first use.
-- **Website and worker.** `npm run dev` starts both: the website through `server.mjs` (which reads each visitor's address from the connection itself, so limits can't be dodged with a forged `X-Forwarded-For`) and the background worker that processes videos. `npm run build` then `npm start` does the same with a production build.
+- **One process.** `npm run dev` starts Next.js's own server (`next dev`, on `127.0.0.1:3000` unless you set `PORT` or `HOST`), and the reviews are made inside that same process by a runner that takes jobs from Postgres (`src/server/runner.ts`). There's no separate worker. `npm run build` then `npm start` does the same with a production build (`next start`). In local mode there's one person, so every request counts as the same visitor for the limits; hosted mode tells visitors apart with `CLIENT_IP_HEADER` or `TRUSTED_PROXIES` (see `.env.example`).
 - **Limits** are reserved in the database before any paid call, inside locks, so parallel tabs can't slip past them. Only a keyed hash of the visitor's address is stored. A review whose upload is rejected or abandoned is given back; deleting a finished review is not.
 
 ## Checks
@@ -214,7 +214,7 @@ With accounts on:
 ```bash
 npm run check   # typecheck, lint, unit + upload tests, design bans, profiles (tests use an in-process Postgres, no Supabase needed)
 npm run e2e     # browser tests at desktop and phone sizes
-npm run smoke -- path/to/video.mp4      # one real review end to end (needs the key and a running worker)
+npm run smoke -- path/to/video.mp4      # one real review end to end (needs the key; it makes the review itself, no running app needed)
 npm run eval    # scores finished reviews, writes a blind identification sheet
 ```
 
@@ -238,9 +238,10 @@ npm run kb:validate -- --urls    # also check every source link
 | `src/ai` | Claude calls, prompts, validators |
 | `src/components/puppets` | The hand-drawn SVG puppets (one look per reviewer) and their wag animations |
 | `src/server` | Database, sign-in, per-person limits, storage, signed media URLs, jobs, review processing |
-| `src/proxy.ts` | Keeps the Supabase sign-in session fresh |
+| `src/proxy.ts` | Keeps the Supabase sign-in session fresh; hosted mode's redirect to its one public address |
+| `src/instrumentation.ts` | Runs at server start: checks hosted settings, resumes unfinished reviews |
 | `supabase/migrations` | Database tables and the storage bucket (applied automatically) |
-| `worker/` | Background worker loop (processing, and copying kept reviews' media to storage) |
+| `scripts/dev.mjs`, `scripts/start.mjs` | Start the built-in database (local mode) and Next.js's server |
 | `scripts/setup.mjs` | Tool check, model download, API key, built-in database |
 | `data/` | Media, the built-in database, the speech model (git-ignored) |
 

@@ -32,8 +32,10 @@ beforeAll(async () => {
   c = await import("@/server/client");
 });
 
-// What server.mjs does: the connection's address under a per-run header name.
-process.env.PANEL_PEER_HEADER = "x-panel-peer-test";
+// Per-person limits tell visitors apart by address, which hosted mode reads from the header its host sets.
+process.env.PANEL_MODE = "hosted";
+process.env.MEDIA_SECRET = Buffer.alloc(32, 9).toString("base64");
+process.env.CLIENT_IP_HEADER = "x-panel-peer-test";
 const peer = (addr: string) => new Headers({ "x-panel-peer-test": addr });
 /** Someone signed out on this network, or signed in to this account on it. */
 const ip = (addr: string) => c.whoIsCalling(peer(addr), null);
@@ -47,18 +49,61 @@ function start(key: import("@/server/client").Who, owner: { userId?: string | nu
 }
 
 describe("who counts as one person", () => {
-  it("uses the address the server saw, never one the browser made up", () => {
+  /** Runs fn with these settings, then puts the old ones back. */
+  const withEnv = <T>(set: Record<string, string | undefined>, fn: () => T): T => {
+    const before = Object.fromEntries(Object.keys(set).map((k) => [k, process.env[k]]));
+    for (const [k, v] of Object.entries(set)) {
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    }
+    try {
+      return fn();
+    } finally {
+      for (const [k, v] of Object.entries(before)) {
+        if (v === undefined) delete process.env[k];
+        else process.env[k] = v;
+      }
+    }
+  };
+
+  it("hosted: uses only the header the host sets, never one the browser made up", () => {
     expect(c.clientIp(new Headers({ "x-panel-peer-test": "203.0.113.9", "x-forwarded-for": "6.6.6.6", "x-real-ip": "7.7.7.7" }))).toBe("203.0.113.9");
-    // Not started through server.mjs and no host header configured: one shared allowance, not a free pass.
-    delete process.env.PANEL_PEER_HEADER;
     expect(c.clientIp(new Headers({ "x-forwarded-for": "6.6.6.6" }))).toBe("unknown");
-    process.env.PANEL_PEER_HEADER = "x-panel-peer-test";
+    withEnv({ CLIENT_IP_HEADER: "cf-connecting-ip" }, () =>
+      expect(c.clientIp(new Headers({ "x-forwarded-for": "10.0.0.1", "cf-connecting-ip": "198.51.100.4" }))).toBe("198.51.100.4"),
+    );
   });
 
-  it("can read a platform's own client-IP header instead", () => {
-    process.env.CLIENT_IP_HEADER = "cf-connecting-ip";
-    expect(c.clientIp(new Headers({ "x-forwarded-for": "10.0.0.1", "cf-connecting-ip": "198.51.100.4" }))).toBe("198.51.100.4");
-    delete process.env.CLIENT_IP_HEADER;
+  it("hosted: with TRUSTED_PROXIES, takes the Nth entry of X-Forwarded-For from the right and nothing the visitor wrote", () => {
+    withEnv({ CLIENT_IP_HEADER: undefined, TRUSTED_PROXIES: "1" }, () => {
+      // The visitor sent "6.6.6.6"; the host's proxy appended the address it really saw.
+      expect(c.clientIp(new Headers({ "x-forwarded-for": "6.6.6.6, 198.51.100.4" }))).toBe("198.51.100.4");
+      // Forging more entries to the left changes nothing.
+      expect(c.clientIp(new Headers({ "x-forwarded-for": "1.1.1.1, 2.2.2.2, 6.6.6.6, 198.51.100.4" }))).toBe("198.51.100.4");
+      expect(c.clientKey(new Headers({ "x-forwarded-for": "1.1.1.1, 198.51.100.4" }))).toBe(c.clientKey(new Headers({ "x-forwarded-for": "9.9.9.9, 198.51.100.4" })));
+    });
+    withEnv({ CLIENT_IP_HEADER: undefined, TRUSTED_PROXIES: "2" }, () => {
+      expect(c.clientIp(new Headers({ "x-forwarded-for": "6.6.6.6, 198.51.100.4, 10.1.2.3" }))).toBe("198.51.100.4");
+      // Fewer entries than proxies means the setting doesn't match the host: one shared allowance, not a forgeable one.
+      expect(c.clientIp(new Headers({ "x-forwarded-for": "6.6.6.6" }))).toBe("unknown");
+    });
+  });
+
+  it("hosted: without either setting, everyone shares one allowance", () => {
+    withEnv({ CLIENT_IP_HEADER: undefined, TRUSTED_PROXIES: undefined }, () => {
+      expect(c.clientIp(new Headers({ "x-forwarded-for": "6.6.6.6" }))).toBe("unknown");
+      expect(c.clientIp(new Headers())).toBe("unknown");
+    });
+  });
+
+  it("local mode: one client, whatever the request says", () => {
+    withEnv({ PANEL_MODE: "local" }, () => {
+      const forged = new Headers({ "x-forwarded-for": "6.6.6.6", "x-panel-peer-test": "7.7.7.7", "cf-connecting-ip": "8.8.8.8" });
+      expect(c.clientIp(forged)).toBe("local");
+      expect(c.clientIp(new Headers())).toBe("local");
+      expect(c.clientKey(forged)).toBe(c.clientKey(new Headers()));
+      withEnv({ TRUSTED_PROXIES: "1", CLIENT_IP_HEADER: "cf-connecting-ip" }, () => expect(c.clientIp(forged)).toBe("local"));
+    });
   });
 
   it("treats a whole IPv6 /64 as one connection, and unwraps IPv4-mapped addresses", () => {

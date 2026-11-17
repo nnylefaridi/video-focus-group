@@ -15,6 +15,10 @@ vi.mock("next/headers", () => ({
   cookies: async () => ({ get: (name: string) => (name === "panel_anon" ? { value: ANON } : undefined), getAll: () => [], set: () => {} }),
 }));
 
+// Waking the runner needs a request to run after; runner.test.ts covers the runner itself.
+const kick = vi.hoisted(() => vi.fn());
+vi.mock("@/server/kick", () => ({ kickAfterResponse: kick, kickNow: kick, kickIfUnattended: kick }));
+
 const DATA = fs.mkdtempSync(path.join(os.tmpdir(), "panel-test-"));
 process.env.DATA_DIR = DATA;
 // With accounts on (Supabase configured), a review belongs to the browser that started it.
@@ -71,6 +75,7 @@ describe("video upload", () => {
     expect(fs.existsSync(path.join(DATA, "media", id, "original.mp4"))).toBe(true);
     const job = await m.db.one("SELECT kind, status FROM app.jobs WHERE review_id = $1", [id]);
     expect(job).toEqual({ kind: "process", status: "pending" });
+    expect(kick).toHaveBeenCalled();
   });
 
   it("rejects a text file renamed to .mp4 and cleans up", async () => {

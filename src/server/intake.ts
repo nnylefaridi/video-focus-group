@@ -11,7 +11,7 @@ import { accessibleReview, mustSignIn, signInResponse } from "./auth";
 
 /**
  * Hosted uploads: the browser sends the video straight to private storage, the website only
- * checks it arrived (upload-complete), and the worker pulls it down here, checks it from its
+ * checks it arrived (upload-complete), and the runner pulls it down here, checks it from its
  * own bytes and hands it to the usual processing. Local mode never comes through here.
  */
 
