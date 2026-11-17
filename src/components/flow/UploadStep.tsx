@@ -6,7 +6,9 @@ import type { ExpertCard } from "@/core/expert";
 import type { Answer } from "@/core/questionnaire/engine";
 import { Avatar } from "../Avatar";
 import { ArrowLeft, Film } from "../Icons";
+import type { PaymentContext } from "@/server/billing";
 import { LoginHint } from "./LoginHint";
+import { PAYMENT_LABELS } from "./PaymentStep";
 
 const MAX_BYTES = 250 * 1024 * 1024;
 const ACCEPT = "video/mp4,video/quicktime,video/webm,.mp4,.mov,.m4v,.webm";
@@ -29,7 +31,22 @@ function uploadWithProgress(url: string, file: File, onProgress: (p: number) => 
   });
 }
 
-export function UploadStep({ answers, board, onBack, onDone }: { answers: Answer[]; board: ExpertCard[]; onBack: () => void; onDone: () => void }) {
+export function UploadStep({
+  answers,
+  board,
+  payment = null,
+  onBack,
+  onDone,
+  onChangePayment,
+}: {
+  answers: Answer[];
+  board: ExpertCard[];
+  /** Hosted mode: how the account pays. Null in local mode, which uses the server's own key. */
+  payment?: PaymentContext | null;
+  onBack: () => void;
+  onDone: () => void;
+  onChangePayment?: () => void;
+}) {
   const router = useRouter();
   const input = useRef<HTMLInputElement>(null);
   const [drag, setDrag] = useState(false);
@@ -74,6 +91,26 @@ export function UploadStep({ answers, board, onBack, onDone }: { answers: Answer
       <h1 className="font-display text-[2rem] leading-tight font-extrabold text-ink sm:text-[2.6rem]">Now, the video</h1>
       <p className="mt-3 font-semibold text-ink-soft">MP4, MOV or WebM, up to 3 minutes and 250 MB.</p>
 
+      {payment?.method && (
+        <p className="mt-2 text-sm text-ink-soft">
+          Paying with {PAYMENT_LABELS[payment.method]}.
+          {onChangePayment && (
+            <button
+              onClick={onChangePayment}
+              disabled={uploading}
+              className="ml-1.5 font-semibold underline decoration-line-strong underline-offset-4 transition-colors hover:text-ink disabled:opacity-40"
+            >
+              Change
+            </button>
+          )}
+        </p>
+      )}
+
+      {payment && !payment.ready ? (
+        <p role="alert" className="mt-8 rounded-xl bg-warn-soft px-4 py-3 text-sm text-warn">
+          {payment.problem}
+        </p>
+      ) : (
       <div
         onDragOver={(e) => {
           e.preventDefault();
@@ -122,6 +159,7 @@ export function UploadStep({ answers, board, onBack, onDone }: { answers: Answer
           </>
         )}
       </div>
+      )}
 
       {error && (
         <p role="alert" className="mt-4 rounded-xl bg-warn-soft px-4 py-3 text-sm text-warn">

@@ -113,10 +113,12 @@ export function BoardView({
   seekRequest: { t: number; n: number } | null;
   onTime: (t: number) => void;
   onPick: (id: string) => void;
-  onRetry: () => void;
+  /** Resolves to why it couldn't start again, or null if it did. */
+  onRetry: () => Promise<string | null>;
   onOpenPlan: () => void;
 }) {
   const { view } = useRoom();
+  const [retryError, setRetryError] = useState<string | null>(null);
   const ready = view.stage === "done" && Boolean(view.discussion?.length);
   const video = <Player variant="stage" seekRequest={seekRequest} onTime={onTime} fill />;
 
@@ -132,9 +134,14 @@ export function BoardView({
             <>
               <p className="font-bold text-warn">The review stopped partway.</p>
               <p className="mt-1 text-sm text-warn">{view.error}</p>
-              <button onClick={onRetry} className="mt-3 rounded-full bg-accent px-5 py-2 text-sm font-bold text-accent-ink">
+              <button onClick={async () => setRetryError(await onRetry())} className="mt-3 rounded-full bg-accent px-5 py-2 text-sm font-bold text-accent-ink">
                 Try again
               </button>
+              {retryError && (
+                <p role="alert" className="mt-3 rounded-xl bg-warn-soft px-4 py-2.5 text-sm text-warn">
+                  {retryError}
+                </p>
+              )}
             </>
           ) : view.stage === "uploading" ? (
             <>

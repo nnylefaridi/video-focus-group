@@ -3,12 +3,18 @@ import { connection } from "next/server";
 import { FlowLoader } from "@/components/flow/FlowLoader";
 import { isHosted } from "@/server/config";
 import { getViewer } from "@/server/auth";
+import { getPaymentContext } from "@/server/billing";
 
-/** Hosted mode asks people to log in after the board, before the upload. Never on this first screen. */
+/**
+ * Hosted mode asks people to log in after the board, then how they'll pay, before the
+ * upload. Never on this first screen. Local mode asks neither.
+ */
 async function Start() {
   await connection();
-  const signInFirst = isHosted() && !(await getViewer()).userId;
-  return <FlowLoader signInFirst={signInFirst} />;
+  if (!isHosted()) return <FlowLoader />;
+  const { userId } = await getViewer();
+  if (!userId) return <FlowLoader signInFirst />;
+  return <FlowLoader payment={await getPaymentContext(userId)} />;
 }
 
 export default function Home() {

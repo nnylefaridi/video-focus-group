@@ -10,6 +10,8 @@ import { QuestionStep } from "./QuestionStep";
 import { BoardStep } from "./BoardStep";
 import { UploadStep } from "./UploadStep";
 import { SignInStep } from "./SignInStep";
+import { PaymentStep } from "./PaymentStep";
+import type { PaymentContext } from "@/server/billing";
 import { Puppet } from "../puppets/Puppet";
 import { useFirstScreen } from "../CoffeeLink";
 
@@ -45,9 +47,14 @@ function load(): Saved | null {
 /**
  * Client-only (see FlowLoader): restores an in-progress flow from this tab's session.
  * `signInFirst` (hosted mode, signed out) puts a log-in step where the upload would be.
+ * `payment` (hosted mode, signed in) is how the account pays; with no choice yet, the
+ * payment step comes before the upload. Local mode passes neither.
  */
-export function Flow({ signInFirst = false }: { signInFirst?: boolean }) {
+export function Flow({ signInFirst = false, payment = null }: { signInFirst?: boolean; payment?: PaymentContext | null }) {
   const [saved] = useState(load);
+  const [pay, setPay] = useState(payment);
+  /** Changing the remembered payment choice from the upload step. */
+  const [choosingPay, setChoosingPay] = useState(false);
   const [answers, setAnswers] = useState<Answer[]>(saved?.answers ?? []);
   const [step, setStep] = useState<Step>(saved?.step ?? "questions");
   const [history, setHistory] = useState<string[]>(() => (saved?.answers ?? []).map((a) => a.questionId));
@@ -124,6 +131,8 @@ export function Flow({ signInFirst = false }: { signInFirst?: boolean }) {
   }, [history, editing]);
 
   const effectiveBoard = boardIds ?? picks.map((p) => p.id);
+  /** Hosted mode: ask how to pay when the account hasn't chosen yet, or wants to change it. */
+  const askPay = pay !== null && (!pay.method || choosingPay);
   const boardCards = effectiveBoard.map((id) => roster.find((c) => c.id === id)).filter((c): c is ExpertCard => Boolean(c));
 
   return (
@@ -182,11 +191,27 @@ export function Flow({ signInFirst = false }: { signInFirst?: boolean }) {
           </motion.div>
         )}
 
-        {step === "upload" && !signInFirst && (
+        {step === "upload" && !signInFirst && askPay && (
+          <motion.div key="pay" initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="flex flex-1 flex-col justify-center py-16">
+            <PaymentStep
+              board={boardCards}
+              current={pay!.method}
+              onBack={() => (choosingPay ? setChoosingPay(false) : setStep("board"))}
+              onChosen={(ctx) => {
+                setPay(ctx);
+                setChoosingPay(false);
+              }}
+            />
+          </motion.div>
+        )}
+
+        {step === "upload" && !signInFirst && !askPay && (
           <motion.div key="upload" initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="flex flex-1 flex-col justify-center py-16">
             <UploadStep
               answers={answers}
               board={boardCards}
+              payment={pay}
+              onChangePayment={pay ? () => setChoosingPay(true) : undefined}
               onBack={() => setStep("board")}
               onDone={() => {
                 try {

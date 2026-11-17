@@ -3,7 +3,8 @@ import { connection } from "next/server";
 import { isComplete, resolve, type Answer } from "@/core/questionnaire/engine";
 import { liveProfiles } from "@/experts/load";
 import { listReviewsFor, newReviewId } from "@/server/reviews";
-import { hasAnthropicKey } from "@/server/config";
+import { hasAnthropicKey, isHosted } from "@/server/config";
+import { getPaymentContext, paymentResponse } from "@/server/billing";
 import { startReview, LimitReached, limitResponse } from "@/server/budget";
 import { authReady, ensureAnonId, getViewer, mustSignIn, signInResponse } from "@/server/auth";
 import { whoIsCalling } from "@/server/client";
@@ -24,7 +25,11 @@ export async function POST(req: Request) {
   // Hosted mode: a review is only made for someone signed in.
   const viewer = await getViewer();
   if (mustSignIn(viewer)) return signInResponse();
-  if (!hasAnthropicKey()) {
+  // Hosted mode: the account's chosen way to pay must be able to pay. The server decides which applies.
+  const payment = isHosted() ? await getPaymentContext(viewer.userId!) : null;
+  if (payment && !payment.ready) return paymentResponse(payment);
+  // Reviews run on the server's key, except when the account pays with its own.
+  if (payment?.method !== "own_key" && !hasAnthropicKey()) {
     return Response.json({ error: "ANTHROPIC_API_KEY is not set. Add it to .env.local and restart the app." }, { status: 503 });
   }
   const parsed = Body.safeParse(await req.json().catch(() => null));
