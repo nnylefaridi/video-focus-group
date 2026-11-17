@@ -10,6 +10,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
+  canonicalLocation,
   checkStartup,
   encryptionSecretOf,
   hostedProblems,
@@ -302,5 +303,23 @@ describe("starting Panel", () => {
     const r = run([path.join(ROOT, "server.mjs")], { PANEL_MODE: "prod" });
     expect(r.status).toBe(1);
     expect(r.stderr).toContain('PANEL_MODE is "prod", but it can only be "local" or "hosted"');
+  });
+});
+
+describe("one public address in hosted mode", () => {
+  const origin = "http://localhost:3000";
+  it("sends page visits at another address for the same server to the public one", () => {
+    expect(canonicalLocation("GET", "/login?next=%2F", "127.0.0.1:3000", origin)).toBe("http://localhost:3000/login?next=%2F");
+    expect(canonicalLocation("GET", "/auth/callback?code=x", "127.0.0.1:3000", origin)).toBe("http://localhost:3000/auth/callback?code=x");
+    expect(canonicalLocation("HEAD", "/", "panel.fly.dev", "https://panel.example.com")).toBe("https://panel.example.com/");
+  });
+  it("leaves the public address, API calls, the health check, Next's files and local mode alone", () => {
+    expect(canonicalLocation("GET", "/", "localhost:3000", origin)).toBeNull();
+    expect(canonicalLocation("GET", "/", "LOCALHOST:3000", origin)).toBeNull();
+    expect(canonicalLocation("GET", "/api/health", "10.0.0.5:3000", origin)).toBeNull();
+    expect(canonicalLocation("POST", "/login", "127.0.0.1:3000", origin)).toBeNull();
+    expect(canonicalLocation("GET", "/_next/static/x.js", "127.0.0.1:3000", origin)).toBeNull();
+    expect(canonicalLocation("GET", "//evil.example/", "127.0.0.1:3000", origin)).toBeNull();
+    expect(canonicalLocation("GET", "/", "127.0.0.1:3000", null)).toBeNull();
   });
 });

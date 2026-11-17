@@ -65,6 +65,22 @@ export function publicOriginOf(value) {
 }
 
 /**
+ * Hosted mode: where to send a page visit that reached the site at another address
+ * (127.0.0.1 vs localhost, or the host's *.fly.dev name), or null to serve it as is.
+ * Sign-in cookies and the Google sign-in's one-time verifier belong to one host, so at
+ * any other address people look signed out and Google sign-in can't finish. API calls
+ * (including the host's health check) and Next's own files are left alone.
+ */
+export function canonicalLocation(method, url, host, publicOrigin) {
+  if (!publicOrigin || !host || (method !== "GET" && method !== "HEAD")) return null;
+  const target = new URL(publicOrigin);
+  if (host.toLowerCase() === target.host) return null;
+  const path = String(url ?? "/");
+  if (!path.startsWith("/") || path.startsWith("//") || path.startsWith("/api/") || path.startsWith("/_next/")) return null;
+  return target.origin + path;
+}
+
+/**
  * KEY_ENCRYPTION_SECRET as the 32 bytes it encodes (from `openssl rand -base64 32`, or
  * 64 hex characters), or null if it isn't exactly that.
  */

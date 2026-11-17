@@ -10,7 +10,7 @@
 import crypto from "node:crypto";
 import { createServer } from "node:http";
 import next from "next";
-import { exitUnlessReady, listenAddress, peerAddress, startupEnv, trustedProxyCount } from "./src/server/mode.mjs";
+import { canonicalLocation, exitUnlessReady, listenAddress, peerAddress, publicOriginOf, startupEnv, trustedProxyCount } from "./src/server/mode.mjs";
 
 const dev = process.argv.includes("--dev");
 const env = startupEnv(process.cwd(), process.env.NODE_ENV || (dev ? "development" : "production"));
@@ -21,6 +21,8 @@ const mode = exitUnlessReady(env);
 const settings = mode === "hosted" ? env : process.env;
 const { hostname, port } = listenAddress(mode, settings);
 const trustedProxies = trustedProxyCount(settings);
+// Hosted mode has one public address; page visits at any other are sent there (see canonicalLocation).
+const publicOrigin = mode === "hosted" ? publicOriginOf(settings.HOSTED_PUBLIC_URL) : null;
 
 const header = `x-panel-peer-${crypto.randomBytes(12).toString("hex")}`;
 process.env.PANEL_PEER_HEADER = header;
@@ -31,6 +33,12 @@ const handle = app.getRequestHandler();
 await app.prepare();
 
 server.on("request", (req, res) => {
+  const elsewhere = canonicalLocation(req.method, req.url, req.headers.host, publicOrigin);
+  if (elsewhere) {
+    res.writeHead(307, { Location: elsewhere, "Cache-Control": "no-store" });
+    res.end();
+    return;
+  }
   req.headers[header] = peerAddress(req.headers["x-forwarded-for"], req.socket.remoteAddress, trustedProxies);
   handle(req, res);
 });
