@@ -9,7 +9,7 @@ import { ArrowLeft, Spinner } from "../Icons";
 import { LoginHint } from "./LoginHint";
 
 export const START_CHOICES: { method: PaymentMethod; label: string; cost: string }[] = [
-  { method: "credits", label: "Pay as you go", cost: "Top up from $10 by card. Each use costs what it costs us plus 20%." },
+  { method: "credits", label: "Buy credits", cost: "Top up from $10 by card. Each use costs what it costs us plus 20%." },
   { method: "own_key", label: "Use your own Anthropic key", cost: "Anthropic bills your key. Video Focus Group charges nothing." },
 ];
 

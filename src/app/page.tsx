@@ -3,6 +3,7 @@ import { connection } from "next/server";
 import { FlowLoader } from "@/components/flow/FlowLoader";
 import { isHosted, MAX_UPLOAD_MB } from "@/server/config";
 import { getViewer } from "@/server/auth";
+import { accountChip } from "@/server/account-label";
 import { getPaymentContext } from "@/server/billing";
 
 /**
@@ -13,10 +14,10 @@ import { getPaymentContext } from "@/server/billing";
 async function Start() {
   await connection();
   if (!isHosted()) return <FlowLoader maxUploadMb={MAX_UPLOAD_MB} />;
-  const { userId } = await getViewer();
-  if (!userId) return <FlowLoader signInFirst />;
+  const viewer = await getViewer();
+  if (!viewer.userId) return <FlowLoader signInFirst />;
   // Only the size limit goes to the browser; where uploads land is the server's business.
-  return <FlowLoader hosted payment={await getPaymentContext(userId)} maxUploadMb={MAX_UPLOAD_MB} />;
+  return <FlowLoader hosted payment={await getPaymentContext(viewer.userId)} maxUploadMb={MAX_UPLOAD_MB} account={await accountChip(viewer)} />;
 }
 
 export default function Home() {

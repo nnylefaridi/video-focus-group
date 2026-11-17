@@ -60,10 +60,10 @@ test("other API calls and non-GET requests aren't redirected either", async () =
   expect(post.headers.location).toBeUndefined();
 });
 
-test("signed out, the first screen asks how to pay, with the launch video playing and a Log in button", async ({ page }) => {
+test("signed out, the first screen asks how to pay, with the launch video playing and a Log in / Sign up button", async ({ page }) => {
   await page.goto(`http://localhost:${PORT}/`);
   await expect(page.getByRole("heading", { name: "Make your videos WORK" })).toBeVisible();
-  await expect(page.getByRole("button", { name: /Pay as you go/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Buy credits/ })).toBeVisible();
   await expect(page.getByRole("button", { name: /Use your own Anthropic key/ })).toBeVisible();
   // No questions yet: the server checks answers only on the visitor's own key or credits.
   await expect(page.locator("main").getByRole("textbox")).toHaveCount(0);
@@ -72,7 +72,7 @@ test("signed out, the first screen asks how to pay, with the launch video playin
   expect(await video.evaluate((v: HTMLVideoElement) => v.muted && v.loop && v.autoplay && v.playsInline)).toBe(true);
   // It fits: nothing to scroll.
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollHeight <= window.innerHeight + 1)).toBe(true);
-  const login = page.getByRole("link", { name: "Log in", exact: true });
+  const login = page.getByRole("link", { name: "Log in / Sign up", exact: true });
   await expect(login).toHaveAttribute("href", "/login?next=/");
   await expect(login).toBeVisible();
   // The sound starts off (only silent video autoplays); one button turns it on.

@@ -1,7 +1,6 @@
 "use client";
 
 import { AnimatePresence, motion } from "motion/react";
-import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { QUESTION_BY_ID, type QuestionNode } from "@/core/questionnaire/graph";
 import { isComplete, nextQuestion, remainingCount, resolve, upsertAnswer, type Answer } from "@/core/questionnaire/engine";
@@ -13,6 +12,7 @@ import { UploadStep } from "./UploadStep";
 import { SignInStep } from "./SignInStep";
 import { PaymentStep } from "./PaymentStep";
 import { SETUP_KEY, StartPay } from "./StartPay";
+import { FlowHeader } from "./FlowHeader";
 import type { PaymentContext } from "@/server/billing";
 import { Puppet } from "../puppets/Puppet";
 import { useFirstScreen } from "../CoffeeLink";
@@ -74,11 +74,14 @@ export function Flow({
   hosted = false,
   payment = null,
   maxUploadMb = 250,
+  account = null,
 }: {
   signInFirst?: boolean;
   hosted?: boolean;
   payment?: PaymentContext | null;
   maxUploadMb?: number;
+  /** Hosted mode, signed in: the name shown in the top-right account menu. */
+  account?: { name: string } | null;
 }) {
   const [saved] = useState(load);
   const [pay, setPay] = useState(payment);
@@ -192,12 +195,8 @@ export function Flow({
 
   return (
     <main className={`relative mx-auto flex min-h-dvh w-full flex-col px-4 sm:px-8 ${startPay ? "max-w-5xl" : "max-w-3xl"}`}>
-      {/* Hosted mode, signed out: a way back into an existing account, on the first screen only. */}
-      {signInFirst && startPay && (
-        <Link href="/login?next=/" className="absolute top-4 right-4 z-10 rounded-full bg-accent px-5 py-2 text-sm font-bold text-accent-ink shadow-lift transition-all hover:brightness-110 sm:right-8">
-          Log in
-        </Link>
-      )}
+      {/* Hosted mode: Log in / Sign up when signed out, or the account menu when signed in. */}
+      <FlowHeader showLogin={signInFirst && startPay} account={account} />
       <AnimatePresence mode="wait">
         {startPay && (
           <motion.div key="start-pay" initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="flex flex-1 flex-col justify-center py-10">

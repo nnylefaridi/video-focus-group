@@ -208,8 +208,17 @@ describe("privacy and terms", () => {
 
 describe("the first screen", () => {
   it("doesn't link the account, privacy or terms pages", () => {
-    const flow = fs.readFileSync(path.join(process.cwd(), "src/components/flow/QuestionStep.tsx"), "utf8");
-    const page = fs.readFileSync(path.join(process.cwd(), "src/app/page.tsx"), "utf8");
-    for (const src of [flow, page]) expect(src).not.toMatch(/\/account|\/privacy|\/terms|LegalLinks/);
+    const files = [
+      "src/components/flow/QuestionStep.tsx",
+      "src/components/flow/Flow.tsx",
+      "src/components/flow/FlowHeader.tsx",
+      "src/components/flow/StartPay.tsx",
+      "src/components/account/AccountMenu.tsx",
+      "src/app/page.tsx",
+    ];
+    for (const f of files) {
+      const src = fs.readFileSync(path.join(process.cwd(), f), "utf8");
+      expect(src, f).not.toMatch(/href=["'`]\/(account|privacy|terms)|LegalLinks/);
+    }
   });
 });
