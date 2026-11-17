@@ -98,8 +98,9 @@ describe("follow-up questions that never got an answer", () => {
     const later = Date.now() + followups.ANSWER_STALE_MS + 1000;
     expect((await followups.getThread(id, "jerry-seinfeld", later))[0].state).toBe("failed");
     expect(await followups.failHangingQuestions(followups.ANSWER_STALE_MS, later)).toBe(1);
-    const [row] = await db.q<{ content: string }>("SELECT content FROM app.followups WHERE review_id = $1", [id]);
-    expect(JSON.parse(row.content)).toEqual({ text: "Asked just before a restart", state: "failed" });
+    const [row] = await db.q<{ content: string; status: string }>("SELECT content, status FROM app.followups WHERE review_id = $1", [id]);
+    expect(row.status).toBe("failed");
+    expect(JSON.parse(row.content)).toEqual({ text: "Asked just before a restart" });
     expect(followups.answeredOnly(await thread())).toEqual([]);
   });
 });
