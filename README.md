@@ -1,6 +1,6 @@
 # Panel
 
-Panel is a local app for people who make short videos. You answer a few questions, it recommends a board of AI reviewers modeled on well-known people in your field, and it comes back with timestamped, evidence-backed notes and a revision plan. Your videos and reviews stay on your computer. A review sends sampled frames and the transcript to Anthropic with your own API key. That, plus a one-time download of the speech-to-text model, is the only outside service it uses.
+Panel is a local app for people who make short videos. You answer a few questions, it recommends a board of AI reviewers modeled on well-known people in your field, and it comes back with timestamped, evidence-backed notes and a revision plan. Your videos and reviews stay on your computer. A review sends sampled frames and the transcript to Anthropic with your own API key. Your browser prepares the video on your own device first (a smaller 720p copy, stills and a transcript), using a speech-to-text model it downloads once (about 79 MB, from Hugging Face). Those are the only outside services it uses.
 
 ![A real review in Panel, from the opening question through the board, processing, the video, a follow-up, and the revision plan](.github/assets/panel-demo.gif)
 
@@ -9,10 +9,9 @@ Panel is a local app for people who make short videos. You answer a few question
 ## What you need
 
 - **Node.js 20.9 or newer** (npm comes with it)
-- **ffmpeg**, including **ffprobe**
-- **whisper.cpp**, the `whisper-cli` program
+- **A recent Chrome, Edge, Safari or Firefox.** Your browser prepares the video (it needs WebCodecs, which these have).
 - **An Anthropic API key with billing turned on.** You pay Anthropic directly. Create the key at [console.anthropic.com](https://console.anthropic.com) under **Settings → API Keys**.
-- About **1 GB** of free disk. The speech model is about 148 MB.
+- About **500 MB** of free disk for the app and your reviews.
 
 **What a review costs.** In our own testing, across 8 finished reviews, a review cost $0.92 on average and $1.27 at most. Panel refuses to start one when less than **$1.50** is left today or this month (`typicalReviewUsd`), stops that review and its follow-ups at **$3** (`REVIEW_COST_CAP_USD`), and stops the app at **$10** a day and **$40** a month (`DAILY_LIMIT_USD`, `MONTHLY_LIMIT_USD`). Those are defaults. Calls are priced in `src/ai/client.ts`: Haiku for the opening questions, Sonnet for frames, Opus for each reviewer. What you pay still depends on the video. In the Anthropic Console, open **Settings → Limits** and set a hard monthly spend limit on the key. Anthropic enforces that even if something on your computer goes wrong.
 
@@ -25,48 +24,26 @@ Panel runs on macOS and Ubuntu 24.04. Windows isn't supported yet.
 Install [Homebrew](https://brew.sh), then:
 
 ```bash
-brew install node ffmpeg whisper-cpp
+brew install node
 ```
 
-Check `node -v` (20.9 or newer), `ffmpeg -version`, `ffprobe -version`, and `whisper-cli -h`. The Homebrew formula is named `whisper-cpp`. The program is named `whisper-cli`. An older whisper.cpp program named `main` is retired and will not transcribe.
+Check `node -v` (20.9 or newer).
 
 ### Ubuntu 24.04
 
-Open a terminal in the folder where you want Panel, and run these one at a time.
+Ubuntu 24.04's `nodejs` package is 18.19.1, which is too old. Don't install Node from apt on this release. Install Node.js 22 from nodejs.org:
 
-1. **Packages** (ffmpeg and ffprobe, a compiler for whisper.cpp, and the tools that download Node):
+```bash
+sudo apt update
+sudo apt install -y curl ca-certificates xz-utils
+VER=$(curl -fsSL https://nodejs.org/dist/latest-v22.x/SHASUMS256.txt | awk '/node-v[0-9.]+-linux-x64\.tar\.xz$/ { print $2; exit }')
+curl -fsSL -o "/tmp/$VER" "https://nodejs.org/dist/latest-v22.x/$VER"
+sudo tar -xJf "/tmp/$VER" -C /usr/local --strip-components=1
+hash -r
+node -v && npm -v
+```
 
-   ```bash
-   sudo apt update
-   sudo apt install -y ffmpeg build-essential cmake git curl ca-certificates xz-utils
-   ```
-
-2. **Node.js 22** from nodejs.org. Ubuntu 24.04's `nodejs` package is 18.19.1, which is too old. Don't install Node from apt on this release.
-
-   ```bash
-   VER=$(curl -fsSL https://nodejs.org/dist/latest-v22.x/SHASUMS256.txt | awk '/node-v[0-9.]+-linux-x64\.tar\.xz$/ { print $2; exit }')
-   curl -fsSL -o "/tmp/$VER" "https://nodejs.org/dist/latest-v22.x/$VER"
-   sudo tar -xJf "/tmp/$VER" -C /usr/local --strip-components=1
-   hash -r
-   node -v && npm -v
-   ```
-
-   `node -v` should print v22. These commands are for x86_64. On arm64, `npm run setup` prints the same steps with `linux-arm64` in the filename.
-
-3. **whisper.cpp** v1.9.5. Ubuntu 24.04 does not package it. The program Panel runs is `whisper-cli`.
-
-   ```bash
-   git clone --depth 1 --branch v1.9.5 https://github.com/ggml-org/whisper.cpp.git
-   cd whisper.cpp
-   cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++
-   cmake --build build -j 2
-   sudo cmake --install build
-   sudo ldconfig
-   whisper-cli -h
-   cd ..
-   ```
-
-   `gcc` and `g++` are set on purpose. `-j 2` keeps the compile from using every core; a higher count can run out of memory. If `whisper-cli` says it cannot find `libwhisper.so.1`, run `sudo ldconfig` again.
+`node -v` should print v22. These commands are for x86_64. On arm64, `npm run setup` prints the same steps with `linux-arm64` in the filename.
 
 ### Then, on either system
 
@@ -91,7 +68,7 @@ Open a terminal in the folder where you want Panel, and run these one at a time.
    npm run setup
    ```
 
-   It checks the tools and prints the install command for anything missing. It downloads the speech-to-text model (about 148 MB), asks you to paste your API key and checks that Anthropic accepts it, and prepares the built-in database. The key is written to `.env.local` on your computer only. Setup does not print the key. `.env.local` is not committed.
+   It checks your Node version and prints the install command if it's too old, asks you to paste your API key and checks that Anthropic accepts it, and prepares the built-in database. The key is written to `.env.local` on your computer only. Setup does not print the key. `.env.local` is not committed.
 
    If you don't have a key yet:
 
@@ -113,7 +90,7 @@ npm run dev
 
 Then open **http://127.0.0.1:3000** in your browser.
 
-- Answer a few questions about your video, check the board of reviewers, then upload the video (MP4, MOV or WebM, up to 3 minutes and 250 MB).
+- Answer a few questions about your video, check the board of reviewers, then upload the video (MP4, MOV or WebM, up to 3 minutes). Your browser prepares it first: the first time, it downloads the speech model (about 79 MB), and preparing takes about as long as the video on a laptop, longer on a phone. Keep the tab open until it's sent.
 - The review takes a few minutes. You can leave the page and come back: past reviews are under **All reviews** (inside any review) at **http://127.0.0.1:3000/reviews**.
 - Ask any reviewer follow-up questions in the **Discussion** tab, under **Ask a reviewer**.
 - **To stop Panel**, go back to the terminal and press **Ctrl + C**. Next time, `cd video-focus-group` and run `npm run dev` again.
@@ -135,9 +112,8 @@ npm run setup
 | What you see | What to do |
 |---|---|
 | `npm run setup` says Node is too old, or `command not found: npm` | On a Mac, `brew install node` or `brew upgrade node`. On Ubuntu 24.04, apt's Node is 18. Use the Node.js 22 steps above, then open a new terminal. |
-| `npm run setup` says ffmpeg, ffprobe, or whisper-cli is missing | Run the command it prints. On a Mac that is `brew install ffmpeg` or `brew install whisper-cpp`. On Ubuntu 24.04 that is `sudo apt install -y ffmpeg` for the video tools, and the whisper.cpp build above for `whisper-cli`. Then run `npm run setup` again. |
-| `whisper-cli: error while loading shared libraries: libwhisper.so.1` | Run `sudo ldconfig`, then `whisper-cli -h`. |
-| `Couldn't download the speech-to-text model` | Setup downloads it from huggingface.co into `data/models/ggml-base.en.bin` (about 148 MB). Check your connection and run `npm run setup` again. A partial download is deleted and started over. |
+| The upload step says this browser can't prepare videos | Use a recent Chrome, Edge, Safari or Firefox. |
+| "Getting the speech reader ready" doesn't move | The browser downloads the speech model once (about 79 MB from huggingface.co, and its runtime from cdn.jsdelivr.net). Check your connection, or that nothing blocks those sites, and try again. |
 | "Anthropic rejected that key" | Copy the whole key again (it starts with `sk-ant-`) and check billing is set up under **Settings → Billing**. Setup does not print the key. |
 | "Anthropic rejected the API key in .env.local" or "out of credits" | Run `npm run setup` and paste a working key, or add credits under **Settings → Billing**. Then restart Panel. |
 | "Couldn't reach Anthropic to check it, so it's saved as is." | The key was written without a live check. Start Panel, and if a review says the key was rejected, replace it. |
@@ -169,11 +145,11 @@ A new review is also refused if less than $1.50 is left in today's or this month
 
 1. **Questions** adapt to what you're making, and there are never more than five: the most useful one for your kind of video is asked next. Your first free-text answer is read by Claude Haiku, which fills in what it can so you skip questions you've already answered. Every answer can be changed from the board screen.
 2. **Board.** Three reviewers are picked for your niche and goal, including at least one pair who tend to disagree. You can swap, add or remove reviewers. Click any name to see their sourced ideas.
-3. **Upload.** MP4, MOV or WebM, up to 3 minutes and 250 MB. The server checks the actual file contents (not the extension), then normalizes the video and strips its metadata.
-4. **Evidence.** Panel detects cuts, samples frames (densely in the first 3 seconds), transcribes speech with word timings, and measures pauses, silence and sound without speech. Claude Sonnet then describes each frame. Every item gets an id like `F012`, `T03`, `S02` or `A01`.
+3. **Upload.** MP4, MOV or WebM, up to 3 minutes. Your browser makes a 720p H.264 copy without the original's metadata, plus a poster, the stills the plan asks for and sprite sheets (4 stills a second) for close looks later, and sends those. The server checks every file it receives (the exact set, sizes, the MP4's header, every JPEG) before anything paid runs.
+4. **Evidence.** Your browser detects cuts, takes stills (densely in the first 3 seconds), transcribes speech with word timings (Whisper base, running in the browser), and measures loudness and silence; the server works out pauses, speech rate and sound without speech from those. Claude Sonnet then describes each still. Every item gets an id like `F012`, `T03`, `S02` or `A01`.
 5. **Review.** Each reviewer (Claude Opus with that person's profile) watches the evidence on their own and must cite evidence ids and their own principle ids. The model never writes timestamps; the app derives them from the cited evidence. Validators drop anything with no evidence, any made-up quote, or any prediction of views or sales.
 6. **The board.** In a paper puppet theatre, each reviewer is a cutout on a popsicle stick behind an origami table. The speaker's puppet wags while their line appears under the flat video player (whose CC button shows captions made from the transcript). The independent notes become a discussion with real disagreements, a comparison of where reviewers agree and differ, and a plan: *change these first*, *worth trying*, *keep these*.
-7. **Ask.** Chat with any reviewer. They can take a closer look at any moment, re-sampling it at 8 frames per second.
+7. **Ask.** Chat with any reviewer. They can take a closer look at any moment, using the stills (4 a second) made when the video was prepared.
 
 ## Optional: accounts with Supabase
 
@@ -197,7 +173,7 @@ You don't need this to use Panel. It adds sign-in (Google, or email and password
 
 With accounts on:
 - Each review is visible only to its account (or, before sign-in, the browser that made it). The tables live in a schema Supabase's public API doesn't expose, with row level security on, so only Panel's server can read them.
-- Signed-in people's videos, posters, captions and frames are copied to the private `review-media` bucket and shown through six-hour signed links. The free plan has 1 GB (a review takes about 3–10 MB); videos over its 50 MB file limit are re-encoded at 720p to fit.
+- Signed-in people's videos, posters, captions and frames are copied to the private `review-media` bucket and shown through six-hour signed links. The free plan has 1 GB; the browser always sends a 720p copy, so a review takes about 5–30 MB. A file over the 50 MB limit isn't copied and stays on this computer only.
 - Limits are per account when signed in and per network when signed out, with an overall ceiling per network (`MAX_REVIEWS_PER_NETWORK_PER_DAY`, default 40; `MAX_ANSWER_CHECKS_PER_NETWORK_PER_HOUR`, default 300). Signed-in people see their limits on **Your reviews**; add your email to `OWNER_EMAILS` to also see what the app has spent.
 - Reviews from an older version of Panel (`data/app.db`) can be moved into an account: `npm run db:import-local -- --email you@example.com`.
 
@@ -213,8 +189,10 @@ With accounts on:
 
 ```bash
 npm run check   # typecheck, lint, unit + upload tests, design bans, profiles (tests use an in-process Postgres, no Supabase needed)
-npm run e2e     # browser tests at desktop and phone sizes
-npm run smoke -- path/to/video.mp4      # one real review end to end (needs the key; it makes the review itself, no running app needed)
+npm run e2e     # browser tests at desktop and phone sizes (run as `ANTHROPIC_API_KEY= npm run e2e` to make no Anthropic calls)
+npm run e2e:browser   # a real video prepared in the browser, up to the first Claude call (a local stand-in answers it; nothing is paid for)
+npm run e2e:hosted    # hosted mode on Next.js's production server: the redirect and the health check
+npm run smoke -- <review-id>      # re-runs the paid steps of one review already prepared in the browser (needs the key)
 npm run eval    # scores finished reviews, writes a blind identification sheet
 ```
 
@@ -234,7 +212,7 @@ npm run kb:validate -- --urls    # also check every source link
 | Path | What |
 |---|---|
 | `src/core` | Shared types and pure logic: questionnaire engine, board recommender, evidence spans |
-| `src/media` | ffmpeg/ffprobe/whisper pipeline |
+| `src/media` | In-browser preparation (`browser/`: conversion, stills, speech in a Web Worker), the evidence built from what the browser sends (`analysis/`), and the MP4 header check |
 | `src/ai` | Claude calls, prompts, validators |
 | `src/components/puppets` | The hand-drawn SVG puppets (one look per reviewer) and their wag animations |
 | `src/server` | Database, sign-in, per-person limits, storage, signed media URLs, jobs, review processing |
@@ -242,8 +220,9 @@ npm run kb:validate -- --urls    # also check every source link
 | `src/instrumentation.ts` | Runs at server start: checks hosted settings, resumes unfinished reviews |
 | `supabase/migrations` | Database tables and the storage bucket (applied automatically) |
 | `scripts/dev.mjs`, `scripts/start.mjs` | Start the built-in database (local mode) and Next.js's server |
-| `scripts/setup.mjs` | Tool check, model download, API key, built-in database |
-| `data/` | Media, the built-in database, the speech model (git-ignored) |
+| `scripts/setup.mjs` | Node check, API key, built-in database |
+| `render.yaml`, `Dockerfile`, `fly.toml` | Hosting the public site: Render first, Fly second (`docs/hosting.md`) |
+| `data/` | Media and the built-in database (git-ignored; never copied into a build) |
 
 ## License
 

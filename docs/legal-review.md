@@ -24,6 +24,7 @@ Have a lawyer read both before launch. The questions below are the gaps I couldn
 14. **Sales tax / VAT.** Credits are sold through Stripe Checkout with no tax set up. Do you need Stripe Tax or a registration anywhere?
 15. **Stripe's requirements.** Stripe asks for refund/cancellation and contact details on the business. Make sure the final terms satisfy them.
 16. **Date.** Both pages say "Last updated November 16, 2026". Update when you finalize them.
+17. **Videos are prepared in the browser.** The original file now never leaves the person's device: their browser makes a 720p copy (without the original's metadata, such as location), stills and a transcript, and only those are uploaded. The privacy page still says "the video you upload"; consider saying it's a smaller copy made on their device. Also, the browser downloads the speech model from Hugging Face (huggingface.co) and its runtime from jsDelivr (cdn.jsdelivr.net), so those two see the visitor's network address (no video or text is sent to them). Name them under providers if you name the others (item 10).
 
 ## Where the pages are linked
 

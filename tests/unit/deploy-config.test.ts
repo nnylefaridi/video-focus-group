@@ -37,16 +37,15 @@ describe("GET /api/health", () => {
   });
 });
 
-describe("Dockerfile, fly.toml and .dockerignore", () => {
+describe("Dockerfile, render.yaml, fly.toml and .dockerignore", () => {
   const docker = read("Dockerfile");
   const fly = read("fly.toml");
   const ignore = read(".dockerignore").split("\n");
+  const render = read("render.yaml");
 
-  it("builds whisper.cpp from a pinned tag and checks the model's checksum", () => {
-    expect(docker).toMatch(/ARG WHISPER_CPP_TAG=v\d+\.\d+\.\d+/);
-    expect(docker).toMatch(/ARG WHISPER_MODEL_SHA1=[0-9a-f]{40}/);
-    expect(docker).toContain("huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en.bin");
-    expect(docker).toContain("sha1sum -c -");
+  it("has no ffmpeg or speech model: videos are prepared in the browser", () => {
+    expect(docker.replace(/^\s*#.*$/gm, "")).not.toMatch(/ffmpeg|whisper|apt-get/i);
+    expect(docker).toContain("DATA_DIR=/tmp/panel-data");
   });
 
   it("runs as a non-root user in hosted mode on 0.0.0.0:8080", () => {
@@ -76,7 +75,7 @@ describe("Dockerfile, fly.toml and .dockerignore", () => {
 
   it("passes only the public Supabase settings as build arguments", () => {
     const args = [...docker.matchAll(/^ARG (\w+)/gm)].map((m) => m[1]);
-    expect(args.filter((a) => !a.startsWith("WHISPER_"))).toEqual(["NEXT_PUBLIC_SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"]);
+    expect(args).toEqual(["NEXT_PUBLIC_SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"]);
   });
 
   it("gives the one process a public, health-checked service, with no worker process group", () => {
@@ -99,5 +98,42 @@ describe("Dockerfile, fly.toml and .dockerignore", () => {
     for (const x of [".env", ".env.*", "data/", "node_modules", "*.mp4"]) expect(ignore).toContain(x);
     expect(ignore).not.toContain("public");
     expect(ignore).not.toContain("src");
+  });
+
+  it("render.yaml: one free Docker web service, health-checked, with no secret values in it", () => {
+    expect(render.match(/^  - type: /gm)).toHaveLength(1);
+    expect(render).toMatch(/^    type: web|^  - type: web$/m);
+    expect(render).toMatch(/runtime: docker/);
+    expect(render).toMatch(/plan: free/);
+    expect(render).toMatch(/healthCheckPath: \/api\/health/);
+    expect(render).toMatch(/key: PANEL_MODE\n\s+value: hosted/);
+    expect(render).toMatch(/key: CLIENT_IP_HEADER\n\s+value: CF-Connecting-IP/);
+    expect(render).toMatch(/key: MAX_UPLOAD_MB\n\s+value: "50"/);
+    // Every setting hosted mode needs is listed, each asked for in the dashboard (sync: false).
+    for (const key of ["HOSTED_PUBLIC_URL", "NEXT_PUBLIC_SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", "SUPABASE_SECRET_KEY", "DATABASE_URL", "ANTHROPIC_API_KEY", "KEY_ENCRYPTION_SECRET", "MEDIA_SECRET", "STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET"]) {
+      expect(render).toMatch(new RegExp(`key: ${key}\\b[^\\n]*\\n\\s+sync: false`));
+    }
+    expect(render).not.toMatch(/sk_live|sk_test|whsec_|sk-ant-|sb_secret_|postgres(ql)?:\/\//);
+  });
+});
+
+describe("standalone build safeguard", () => {
+  it("removes a traced data folder from .next/standalone, and leaves the rest", async () => {
+    const os = await import("node:os");
+    const { removeTracedData } = await import("../../scripts/after-build.mjs");
+    const dist = fs.mkdtempSync(path.join(os.tmpdir(), "panel-dist-"));
+    fs.mkdirSync(path.join(dist, "standalone", "data", "media"), { recursive: true });
+    fs.writeFileSync(path.join(dist, "standalone", "data", "app.db"), "x");
+    fs.writeFileSync(path.join(dist, "standalone", "server.js"), "");
+    expect(removeTracedData(dist)).toBe(true);
+    expect(fs.existsSync(path.join(dist, "standalone", "data"))).toBe(false);
+    expect(fs.existsSync(path.join(dist, "standalone", "server.js"))).toBe(true);
+    expect(removeTracedData(dist)).toBe(false);
+  });
+
+  it("runs after every npm run build", () => {
+    const pkg = JSON.parse(read("package.json"));
+    expect(pkg.scripts.postbuild).toBe("node scripts/after-build.mjs");
+    expect(read("Dockerfile")).toMatch(/RUN npm run build/);
   });
 });

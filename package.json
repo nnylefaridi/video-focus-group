@@ -6,6 +6,7 @@
     "setup": "node scripts/setup.mjs",
     "dev": "node scripts/dev.mjs",
     "build": "next build",
+    "postbuild": "node scripts/after-build.mjs",
     "start": "node scripts/start.mjs",
     "lint": "eslint",
     "typecheck": "next typegen && tsc --noEmit",

@@ -1,4 +1,4 @@
-# Fly.io config for the hosted site. See docs/hosting.md for the full launch steps.
+# Fly.io config: the second choice of host (Render is the first; render.yaml). See docs/hosting.md.
 # One process does everything: the website, and (inside it) the review runner.
 app = "video-focus-group"      # change to a name that's free on Fly (fly launch --no-deploy can pick one)
 primary_region = "yyz"         # Toronto; pick the region closest to your Supabase project
@@ -34,7 +34,7 @@ primary_region = "yyz"         # Toronto; pick the region closest to your Supaba
     timeout = "5s"
     grace_period = "20s"
 
-# Until video preparation moves into the browser, the machine also runs ffmpeg and whisper.
+# Videos are prepared in the visitor's browser; this one process needs little (measured peak: docs/hosting.md).
 [[vm]]
-  size = "shared-cpu-2x"
-  memory = "2gb"
+  size = "shared-cpu-1x"
+  memory = "512mb"
