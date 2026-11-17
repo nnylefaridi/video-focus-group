@@ -44,7 +44,7 @@ export function BoardStep({ answers, picks, roster, board, onChangeBoard, onEdit
 
       {chosen.length > 0 && (
         <div className="-mx-4 mt-6 sm:-mx-10">
-          <Boardroom board={chosen} states={{}} />
+          <Boardroom board={chosen} states={{}} sticks={false} />
         </div>
       )}
 

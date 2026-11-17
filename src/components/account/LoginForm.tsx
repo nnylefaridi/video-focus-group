@@ -5,6 +5,7 @@ import { useState } from "react";
 import { supabaseBrowser } from "@/lib/supabase-browser";
 import { authReady, safeNext } from "@/lib/supabase";
 import { ArrowLeft, Spinner } from "../Icons";
+import { LegalLinks } from "./LegalLinks";
 
 type Mode = "login" | "signup";
 
@@ -36,7 +37,7 @@ export function LoginForm() {
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState<null | "google" | "email" | "reset">(null);
   const [error, setError] = useState<string | null>(params.get("error") ? "That link didn't work or has expired. Please try again." : null);
-  const [notice, setNotice] = useState<string | null>(params.get("confirmed") ? "Almost there: log in here to finish. If you just confirmed your email, that worked." : null);
+  const [notice, setNotice] = useState<string | null>(params.get("confirmed") ? "Almost there: log in here to finish. If you just confirmed your email in another browser, that worked." : null);
 
   if (!authReady) {
     return (
@@ -87,6 +88,12 @@ export function LoginForm() {
     const { data, error } = await auth.signUp({ email, password, options: { emailRedirectTo: callback(next) } });
     setBusy(null);
     if (error) return setError(friendly(error.message));
+    // The email already has an account (Google or email): Supabase answers as if it signed up
+    // but sends nothing, and marks it with an empty identity list.
+    if (data.user && data.user.identities?.length === 0) {
+      setMode("login");
+      return setError(`There's already an account for ${email}. Log in instead: use Continue with Google if you signed up with Google, or Forgot password to set a password.`);
+    }
     if (data.session) {
       router.replace(next);
       router.refresh();
@@ -180,7 +187,9 @@ export function LoginForm() {
         </p>
       )}
 
-      <div className="mt-6 flex flex-wrap items-center justify-between gap-3 text-sm font-semibold text-ink-soft">
+      <LegalLinks className="mt-6" />
+
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-sm font-semibold text-ink-soft">
         <button
           onClick={() => {
             reset();

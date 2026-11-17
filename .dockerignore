@@ -1,0 +1,38 @@
+# Secrets and local data never go into an image
+.env
+.env.*
+!.env.example
+data/
+*.pem
+
+# Dependencies and build output are made inside the image
+node_modules
+.next
+out
+build
+*.tsbuildinfo
+next-env.d.ts
+
+# Git, editors, OS
+.git
+.gitignore
+.DS_Store
+.claude
+.vscode
+.idea
+
+# Tests and their output
+test-results
+playwright-report
+coverage
+tests/eval/out
+
+# Big local files and source art the app doesn't use at run time
+*.mp4
+*.mov
+Cutouts
+cutouts.jpeg
+Paper-Cutout Video Review Boardroom.png
+
+# Docs and drafts (the app doesn't read them)
+docs

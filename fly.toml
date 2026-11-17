@@ -1,0 +1,40 @@
+# Fly.io config: the second choice of host (Render is the first; render.yaml). See docs/hosting.md.
+# One process does everything: the website, and (inside it) the review runner.
+app = "video-focus-group"      # change to a name that's free on Fly (fly launch --no-deploy can pick one)
+primary_region = "yyz"         # Toronto; pick the region closest to your Supabase project
+
+[build]
+  dockerfile = "Dockerfile"
+  # NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY are passed on the command line:
+  #   fly deploy --build-arg NEXT_PUBLIC_SUPABASE_URL=... --build-arg NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=...
+
+[env]
+  PANEL_MODE = "hosted"
+  # server.js listens on HOSTNAME (set in the Dockerfile) and PORT.
+  PORT = "8080"
+  # Fly's proxy overwrites Fly-Client-IP with the visitor's address on every request.
+  CLIENT_IP_HEADER = "Fly-Client-IP"
+  # One proxy (Fly's) is in front of the website.
+  TRUSTED_PROXIES = "1"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  # A review runs inside this process for several minutes after the upload finishes, with
+  # nobody visiting. Fly stops a machine that has had no traffic, so it stays on.
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    method = "GET"
+    path = "/api/health"
+    protocol = "http"
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "20s"
+
+# Videos are prepared in the visitor's browser; this one process needs little (measured peak: docs/hosting.md).
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

@@ -1,7 +1,3 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import { execFileSync } from "node:child_process";
 import { expect, test } from "@playwright/test";
 
 const hasKey = Boolean(process.env.ANTHROPIC_API_KEY);
@@ -16,10 +12,27 @@ test("the first screen is only the first question and its answer box", async ({ 
   // The only other control is the answer box's own send button.
   await expect(main.getByRole("button")).toHaveCount(1);
   await expect(main.getByRole("button", { name: "Continue" })).toBeDisabled();
-  // The only link on the page is the small Buy Me A Coffee tag in the corner.
-  await expect(page.getByRole("link")).toHaveCount(1);
-  await expect(page.getByRole("link", { name: "Buy me a coffee" })).toHaveAttribute("href", "https://buymeacoffee.com/nylefaridi");
+  // No links at all, not even the Buy me a coffee tag, and not in the server's HTML either.
+  await expect(page.getByRole("link")).toHaveCount(0);
   await expect(page.locator("header, footer, nav")).toHaveCount(0);
+  expect(await (await page.request.get("/")).text()).not.toContain("buymeacoffee.com");
+});
+
+test("the Buy me a coffee tag is on every screen after the first", async ({ page }) => {
+  await page.goto("/reviews");
+  await expect(page.getByRole("link", { name: "Buy me a coffee" })).toHaveAttribute("href", "https://buymeacoffee.com/nylefaridi");
+});
+
+test("privacy and terms are plain pages, and local mode has no account page", async ({ page }) => {
+  for (const [path, heading] of [["/privacy", "Privacy"], ["/terms", "Terms"]]) {
+    await page.goto(path);
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText(heading);
+    await expect(page.locator("main")).toContainText("Video Focus Group");
+  }
+  // No accounts on your own computer: /account goes to the reviews list.
+  await page.goto("/account");
+  await expect(page).toHaveURL(/\/reviews$/);
+  await expect(page.getByRole("link", { name: "Your account" })).toHaveCount(0);
 });
 
 test("suggestions appear only once the answer box is clicked", async ({ page, isMobile }) => {
@@ -59,7 +72,7 @@ test("every reviewer has a profile page with sourced ideas", async ({ page, requ
 
 test("the reviews list and unknown pages render", async ({ page }) => {
   await page.goto("/reviews");
-  await expect(page.getByRole("heading", { name: "Your reviews" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Your reviews", exact: true })).toBeVisible();
   await page.getByRole("link", { name: "New review" }).click();
   await expect(page).toHaveURL("/");
   await page.goto("/r/AAAAAAAAAAAAAAAA");
@@ -106,14 +119,10 @@ test("a finished review opens as a paper puppet boardroom", async ({ page, reque
   await expect(page.getByRole("heading", { name: "Revision plan" })).toBeVisible();
 });
 
-test("a large upload reaches the server whole (not cut off at 10 MB)", async ({ request }) => {
+test("a large prepared video reaches the server whole (not cut off at 10 MB)", async ({ request }) => {
   test.skip(!hasKey, "Starting a review needs ANTHROPIC_API_KEY");
-  // Over 10 MB and over 3 minutes: if every byte arrives, the server measures the length and
-  // refuses it for being too long (nothing is processed or spent). A cut-off file can't be read at all.
-  const file = path.join(os.tmpdir(), "panel-e2e-big.mp4");
-  if (!fs.existsSync(file))
-    execFileSync("ffmpeg", ["-y", "-v", "error", "-f", "lavfi", "-i", "testsrc=size=640x360:rate=30:duration=190", "-c:v", "libx264", "-preset", "ultrafast", "-b:v", "1M", file]);
-  expect(fs.statSync(file).size).toBeGreaterThan(15 * 1024 * 1024);
+  // Sends 20 MB to this computer's upload address and checks every byte arrived. Nothing is
+  // processed or spent: the review never gets its manifest.
   const answers = [
     { questionId: "what", display: "A comedy skit", fields: { category: "creator", format: "skit", isComedy: true, summary: "A comedy skit", platforms: ["tiktok"], reactions: ["laugh"], niche: "comedy", audience: "students" } },
     { questionId: "punchline", display: "Skipped", fields: {}, skipped: true },
@@ -121,8 +130,11 @@ test("a large upload reaches the server whole (not cut off at 10 MB)", async ({ 
     { questionId: "stage", display: "Growing", fields: { accountStage: "growing" } },
   ];
   const created = await request.post("/api/reviews", { data: { answers, board: ["jerry-seinfeld"] } });
+  test.skip(created.status() === 401, "Accounts are on and this test browser isn't signed in");
   expect(created.status()).toBe(200);
   const { id } = await created.json();
-  const up = await request.put(`/api/reviews/${id}/video`, { data: fs.readFileSync(file), headers: { "content-type": "video/mp4", "x-file-name": "big.mp4" } });
-  expect(await up.json()).toEqual({ error: "That video is 190 seconds long. The limit is 3 minutes." });
+  const size = 20 * 1024 * 1024;
+  const up = await request.put(`/api/reviews/${id}/files/video.mp4`, { data: Buffer.alloc(size, 7), headers: { "content-type": "video/mp4" } });
+  expect(await up.json()).toEqual({ ok: true, bytes: size });
+  await request.delete(`/api/reviews/${id}`);
 });

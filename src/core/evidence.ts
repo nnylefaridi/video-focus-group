@@ -19,7 +19,8 @@ export const Frame = z.object({
 });
 export type Frame = z.infer<typeof Frame>;
 
-export const Word = z.object({ w: z.string(), start: z.number(), end: z.number(), p: z.number() });
+/** `p` is the speech model's confidence in the word, or null when the engine doesn't report one (the in-browser transcriber doesn't). */
+export const Word = z.object({ w: z.string(), start: z.number(), end: z.number(), p: z.number().nullable() });
 export const TranscriptSegment = z.object({
   id: z.string(),
   start: z.number(),
@@ -60,6 +61,21 @@ export const Coverage = z.object({
 });
 export type Coverage = z.infer<typeof Coverage>;
 
+/**
+ * A sheet of small stills taken 4 times a second across the whole video, made in the browser
+ * along with the sampled frames. Follow-up "inspect" crops tiles from these instead of decoding
+ * the video again. `t` holds each tile's real decoded timestamp, in tile order (row by row).
+ */
+export const SpriteSheet = z.object({
+  file: z.string(),
+  cols: z.number(),
+  rows: z.number(),
+  tileW: z.number(),
+  tileH: z.number(),
+  t: z.array(z.number()),
+});
+export type SpriteSheet = z.infer<typeof SpriteSheet>;
+
 export const Ledger = z.object({
   shots: z.array(Shot),
   frames: z.array(Frame),
@@ -71,6 +87,8 @@ export const Ledger = z.object({
   loudness: z.array(z.number().nullable()),
   perception: z.array(FramePerception),
   coverage: Coverage,
+  /** Reviews prepared in the browser have these; older reviews don't. */
+  sprites: z.array(SpriteSheet).optional(),
 });
 export type Ledger = z.infer<typeof Ledger>;
 

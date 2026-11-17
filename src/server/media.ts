@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import { MEDIA_SECRET } from "./config";
+import { mediaSecret } from "./config";
 
 /** Files inside a review folder that may be served to the browser. */
 const SERVABLE = /^(video\.mp4|poster\.jpg|captions\.vtt|frames\/F\d{3,4}\.jpg)$/;
@@ -9,7 +9,7 @@ export function isServable(file: string): boolean {
 }
 
 function sign(reviewId: string, file: string, exp: number): string {
-  return crypto.createHmac("sha256", MEDIA_SECRET).update(`${reviewId}/${file}/${exp}`).digest("base64url");
+  return crypto.createHmac("sha256", mediaSecret()).update(`${reviewId}/${file}/${exp}`).digest("base64url");
 }
 
 /**

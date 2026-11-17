@@ -3,10 +3,12 @@ import { connection } from "next/server";
 import { isComplete, resolve, type Answer } from "@/core/questionnaire/engine";
 import { liveProfiles } from "@/experts/load";
 import { listReviewsFor, newReviewId } from "@/server/reviews";
-import { hasAnthropicKey } from "@/server/config";
+import { hasAnthropicKey, isHosted } from "@/server/config";
+import { getPaymentContext, paymentResponse } from "@/server/billing";
 import { startReview, LimitReached, limitResponse } from "@/server/budget";
-import { authReady, ensureAnonId, getViewer } from "@/server/auth";
+import { authReady, ensureAnonId, getViewer, mustSignIn, signInResponse } from "@/server/auth";
 import { whoIsCalling } from "@/server/client";
+import { creditsResponse, NotEnoughCredits } from "@/server/credits";
 
 const Body = z.object({
   answers: z.array(z.object({ questionId: z.string(), display: z.string(), fields: z.record(z.string(), z.unknown()), skipped: z.boolean().optional() })),
@@ -21,7 +23,14 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  if (!hasAnthropicKey()) {
+  // Hosted mode: a review is only made for someone signed in.
+  const viewer = await getViewer();
+  if (mustSignIn(viewer)) return signInResponse();
+  // Hosted mode: the account's chosen way to pay must be able to pay. The server decides which applies.
+  const payment = isHosted() ? await getPaymentContext(viewer.userId!) : null;
+  if (payment && !payment.ready) return paymentResponse(payment);
+  // Reviews run on the server's key, except when the account pays with its own.
+  if (payment?.method !== "own_key" && !hasAnthropicKey()) {
     return Response.json({ error: "ANTHROPIC_API_KEY is not set. Add it to .env.local and restart the app." }, { status: 503 });
   }
   const parsed = Body.safeParse(await req.json().catch(() => null));
@@ -37,14 +46,23 @@ export async function POST(req: Request) {
   }
 
   // Signed in: the review is the account's. Signed out: it's this browser's until sign-in.
-  const viewer = await getViewer();
   const anonId = viewer.userId ? null : await ensureAnonId(viewer);
   const id = newReviewId();
   const title = (fields.summary ?? "Untitled video").slice(0, 120);
   try {
-    await startReview(whoIsCalling(req.headers, viewer.userId), { id, answers: active, intent: fields, board, title, userId: viewer.userId, anonId });
+    await startReview(whoIsCalling(req.headers, viewer.userId), {
+      id,
+      answers: active,
+      intent: fields,
+      board,
+      title,
+      userId: viewer.userId,
+      anonId,
+      paidWith: payment?.method ?? null,
+    });
   } catch (e) {
     if (e instanceof LimitReached) return limitResponse(e);
+    if (e instanceof NotEnoughCredits) return creditsResponse(e);
     throw e;
   }
   return Response.json({ id });

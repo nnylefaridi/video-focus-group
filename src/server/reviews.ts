@@ -1,12 +1,15 @@
+import type { Manifest } from "@/media/analysis/manifest";
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import { one, q, tx } from "./db";
-import { MEDIA_DIR } from "./config";
+import { isHosted, MEDIA_DIR } from "./config";
 import type { Answer } from "@/core/questionnaire/engine";
 import type { IntentFields } from "@/core/intent";
-import type { Ledger } from "@/core/evidence";
+import type { FramePerception, Ledger } from "@/core/evidence";
 import type { ReviewerNotes, ReviewStage, StoredTurn, Synthesis } from "@/core/review";
+import { isPaymentMethod, type PaymentMethod } from "./billing";
+import { settleOpenReservations } from "./credits";
 
 export type VideoMeta = {
   originalName: string;
@@ -15,6 +18,17 @@ export type VideoMeta = {
   width: number;
   height: number;
   hasAudio: boolean;
+};
+
+/** Frame descriptions saved batch by batch (keyed by position) for one exact set of frames (perceptionKey). */
+/**
+ * Work in progress for a review. `manifest` is what the browser sent with its prepared video
+ * (already checked by upload-complete); `perception` holds frame descriptions saved batch by
+ * batch (keyed by position) for one exact set of frames (perceptionKey).
+ */
+export type Draft = {
+  manifest?: Manifest;
+  perception?: { key: string; batches: Record<string, FramePerception[]> };
 };
 
 export type Cost = { usd: number; calls: { label: string; model: string; usd: number; inTok: number; outTok: number }[] };
@@ -40,6 +54,10 @@ export type ReviewRecord = {
   validation: Record<string, { dropped: string[]; fixed: string[] }> | null;
   cost: Cost;
   storedFiles: string[];
+  /** Paid work already done for a stage that hasn't finished, kept so a restart doesn't repeat it. Null once the stage is saved. */
+  draft: Draft | null;
+  /** Hosted mode: how the review is paid for, fixed when it starts. Null: the server's own key. */
+  paidWith: PaymentMethod | null;
 };
 
 type Row = Record<string, unknown>;
@@ -69,6 +87,8 @@ function fromRow(r: Row): ReviewRecord {
     validation: json<ReviewRecord["validation"]>(r.validation),
     cost: json<Cost>(r.cost) ?? { usd: 0, calls: [] },
     storedFiles: json<string[]>(r.stored_files) ?? [],
+    draft: json<Draft>(r.draft),
+    paidWith: isPaymentMethod(r.paid_with) ? r.paid_with : null,
   };
 }
 
@@ -83,10 +103,12 @@ export function reviewDir(id: string): string {
 
 export type Owner = { userId: string | null; anonId: string | null };
 
-export const INSERT_REVIEW = `INSERT INTO app.reviews (id, created_at, updated_at, user_id, anon_id, stage, answers, intent, board, title)
-  VALUES ($1, $2, $2, $3, $4, 'uploading', $5::jsonb, $6::jsonb, $7::jsonb, $8)`;
+export const INSERT_REVIEW = `INSERT INTO app.reviews (id, created_at, updated_at, user_id, anon_id, stage, answers, intent, board, title, paid_with)
+  VALUES ($1, $2, $2, $3, $4, 'uploading', $5::jsonb, $6::jsonb, $7::jsonb, $8, $9::text::app.payment_method)`;
 
-export function insertReviewParams(input: { id: string; answers: Answer[]; intent: IntentFields; board: string[]; title: string } & Owner) {
+type NewReview = { id: string; answers: Answer[]; intent: IntentFields; board: string[]; title: string; paidWith?: PaymentMethod | null };
+
+export function insertReviewParams(input: NewReview & Owner) {
   return [
     input.id,
     Date.now(),
@@ -96,11 +118,17 @@ export function insertReviewParams(input: { id: string; answers: Answer[]; inten
     JSON.stringify(input.intent),
     JSON.stringify(input.board),
     input.title,
+    input.paidWith ?? null,
   ];
 }
 
-export async function createReview(input: { id: string; answers: Answer[]; intent: IntentFields; board: string[]; title: string } & Partial<Owner>) {
+export async function createReview(input: NewReview & Partial<Owner>) {
   await q(INSERT_REVIEW, insertReviewParams({ userId: null, anonId: null, ...input }));
+}
+
+/** A retried review runs on however the account pays now. */
+export async function setPaidWith(id: string, method: PaymentMethod | null) {
+  await q("UPDATE app.reviews SET paid_with = $2::text::app.payment_method, updated_at = $3 WHERE id = $1", [id, method, Date.now()]);
 }
 
 export async function getReview(id: string): Promise<ReviewRecord | null> {
@@ -154,6 +182,7 @@ const COLUMNS = {
   validation: "validation",
   cost: "cost",
   storedFiles: "stored_files",
+  draft: "draft",
 } as const;
 const TEXT_COLUMNS = new Set(["stage", "stage_detail", "error"]);
 
@@ -194,12 +223,18 @@ export async function cleanupAbandonedUploads(olderThanMs = 30 * 60 * 1000): Pro
  */
 export async function deleteReview(id: string, opts: { refund?: boolean } = {}) {
   const r = await getReview(id);
+  // Credit set aside for it comes back, less anything its calls already cost.
+  await settleOpenReservations(id);
   await tx(async (t) => {
     if (opts.refund) await t("DELETE FROM app.usage WHERE review_id = $1 AND kind = 'review'", [id]);
     await t("DELETE FROM app.reviews WHERE id = $1", [id]);
   });
   fs.rmSync(reviewDir(id), { recursive: true, force: true });
-  if (r?.userId && r.storedFiles.length) {
+  if (r?.userId && isHosted()) {
+    // Everything under the review's folder, including files sent but never checked.
+    const { removeAllStoredMedia } = await import("./storage");
+    await removeAllStoredMedia(r.userId, id).catch((e) => console.error("[storage] remove failed", e));
+  } else if (r?.userId && r.storedFiles.length) {
     const { removeStoredMedia } = await import("./storage");
     await removeStoredMedia(r.userId, id, r.storedFiles).catch((e) => console.error("[storage] remove failed", e));
   }

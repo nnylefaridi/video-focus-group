@@ -2,10 +2,12 @@ import { z } from "zod";
 import { QUESTION_BY_ID } from "@/core/questionnaire/graph";
 import { resolve, type Answer } from "@/core/questionnaire/engine";
 import { interpretAnswer } from "@/ai/interpret";
-import { AiUnavailable, BudgetExceeded } from "@/ai/client";
+import { AiUnavailable, BudgetExceeded, asPayer, NO_PAYER, type Payer } from "@/ai/client";
 import { spendAnswerCheck, LimitReached, limitResponse } from "@/server/budget";
 import { whoIsCalling } from "@/server/client";
 import { getViewer } from "@/server/auth";
+import { isHosted } from "@/server/config";
+import { getPaymentContext, paymentResponse } from "@/server/billing";
 
 const Body = z.object({
   questionId: z.string(),
@@ -21,14 +23,25 @@ export async function POST(req: Request) {
 
   // Earlier answers, minus the one being (re)answered.
   const earlier = (parsed.data.answers as Answer[]).filter((a) => a.questionId !== q.id);
+  const { userId } = await getViewer();
+  // Hosted mode: the answer check runs on the visitor's own saved key or is charged to their
+  // credits. Someone who hasn't signed in and chosen how to pay gets nothing from the server's key.
+  let payer: Payer | null = null;
+  if (isHosted()) {
+    if (!userId) return Response.json({ error: NO_PAYER, payment: "choose", login: true }, { status: 401 });
+    const payment = await getPaymentContext(userId);
+    if (!payment.method || !payment.ready) return paymentResponse(payment);
+    payer = { userId, method: payment.method };
+  }
   try {
-    await spendAnswerCheck(whoIsCalling(req.headers, (await getViewer()).userId));
+    await spendAnswerCheck(whoIsCalling(req.headers, userId));
   } catch (e) {
     if (e instanceof LimitReached) return limitResponse(e);
     throw e;
   }
   try {
-    const fields = await interpretAnswer(q, parsed.data.raw, resolve(earlier).fields);
+    const check = () => interpretAnswer(q, parsed.data.raw, resolve(earlier).fields);
+    const fields = payer ? await asPayer(payer, check) : await check();
     return Response.json({ fields });
   } catch (e) {
     const known = e instanceof AiUnavailable || e instanceof BudgetExceeded;

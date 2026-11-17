@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isComplete, nextQuestion, resolve, upsertAnswer, visibleQuestions, type Answer } from "./engine";
+import { isComplete, nextQuestion, remainingCount, resolve, upsertAnswer, visibleQuestions, type Answer } from "./engine";
 
 const a = (questionId: string, fields: Answer["fields"], display = "x"): Answer => ({ questionId, display, fields });
 
@@ -97,5 +97,12 @@ describe("questionnaire engine", () => {
   it("shows explainer-only questions only for explainers", () => {
     expect(visibleQuestions({ category: "creator", format: "explainer" }).map((q) => q.id)).toContain("takeaway");
     expect(visibleQuestions({ category: "creator", format: "skit" }).map((q) => q.id)).not.toContain("takeaway");
+  });
+  it("doesn't claim the category question is the last one while the kind of video is unknown", () => {
+    const first = [a("what", { summary: "a video" })];
+    expect(nextQuestion(first)?.id).toBe("category");
+    expect(remainingCount(first)).toBeNull();
+    const known = [a("what", { summary: "a video" }), a("category", { category: "creator" })];
+    expect(remainingCount(known)).toBeGreaterThan(1);
   });
 });

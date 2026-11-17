@@ -91,8 +91,13 @@ export function inferredQuestions(answers: Answer[]): QuestionNode[] {
   return visibleQuestions(fields).filter((q) => !answered.has(q.id) && isFilled(fields, q));
 }
 
-/** Questions left, for the quiet progress indicator. */
-export function remainingCount(answers: Answer[]): number {
+/**
+ * Questions left, for the quiet progress indicator, or null when it can't be known yet.
+ * Until the kind of video is known, only the category question is visible, so a count
+ * would wrongly claim it is the last one; which questions follow depends on the answer.
+ */
+export function remainingCount(answers: Answer[]): number | null {
+  if (resolve(answers).fields.category === undefined) return null;
   return Math.min(candidates(answers).length, Math.max(0, MAX_QUESTIONS - askedCount(answers)));
 }
 

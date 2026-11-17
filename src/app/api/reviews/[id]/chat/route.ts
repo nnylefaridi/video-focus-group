@@ -1,19 +1,21 @@
 import { z } from "zod";
 import { connection } from "next/server";
 import type Anthropic from "@anthropic-ai/sdk";
-import { reviewDir, updateReview, type ReviewRecord } from "@/server/reviews";
-import { accessibleReview } from "@/server/auth";
+import { getReview, reviewDir, updateReview, type ReviewRecord } from "@/server/reviews";
+import { accessibleReview, mustSignIn, signInResponse } from "@/server/auth";
 import { whoIsCalling } from "@/server/client";
 import { enqueue } from "@/server/jobs";
-import { restoreFile } from "@/server/storage";
-import { addMessage, getThread } from "@/server/followups";
+import { kickNow } from "@/server/kick";
+import { addMessage, answeredOnly, getThread, settleQuestion } from "@/server/followups";
 import { getProfile } from "@/experts/load";
 import { followupSystem, INSPECT_TOOL, MODELS, streamText } from "@/ai/followup";
 import { AiUnavailable, BudgetExceeded } from "@/ai/client";
-import { denseSample } from "@/media/pipeline";
+import { framesFromSprites } from "@/server/inspect";
+import { isHosted } from "@/server/config";
 import { perceiveFrames } from "@/ai/perceive";
 import { evidenceSpan, type Ledger } from "@/core/evidence";
 import { spendFollowup, LimitReached, limitResponse } from "@/server/budget";
+import { creditsResponse, NotEnoughCredits, onReservation, settleReservation } from "@/server/credits";
 
 const Body = z.object({ reviewerId: z.string(), message: z.string().trim().min(1).max(2000) });
 
@@ -28,24 +30,31 @@ export async function GET(req: Request, ctx: RouteContext<"/api/reviews/[id]/cha
 async function inspect(r: ReviewRecord, ledger: Ledger, seconds: number, focus: string) {
   const reviewId = r.id;
   const dir = reviewDir(reviewId);
-  // The working copy may have been cleared; a kept review's video comes back from storage.
-  if (r.userId && r.storedFiles.includes("video.mp4")) await restoreFile(r.userId, reviewId, "video.mp4");
   const t = Math.min(Math.max(0, seconds), ledger.coverage.durationSec);
-  const added = await denseSample(dir, ledger.frames, ledger.shots, ledger.coverage.durationSec, t, 1.5);
+  const added = await framesFromSprites(r, ledger, t, 1.5);
   const perception = added.length
     ? await perceiveFrames(reviewId, dir, added, { intent: r.intent, transcript: ledger.transcript })
     : [];
   ledger.frames.push(...added);
   ledger.perception.push(...perception);
-  await updateReview(reviewId, { ledger });
-  // New frames join the stored record too.
-  if (r.userId && added.length) await enqueue(reviewId, "store");
+  // Hosted: the new stills are in storage already. Local: they join an account's copy, if it's kept in one.
+  const fresh = await getReview(reviewId);
+  await updateReview(reviewId, {
+    ledger,
+    ...(isHosted() && added.length ? { storedFiles: [...new Set([...(fresh?.storedFiles ?? []), ...added.map((f) => f.file)])] } : {}),
+  });
+  if (!isHosted() && r.userId && added.length) {
+    await enqueue(reviewId, "store");
+    kickNow();
+  }
   // Include frames already sampled in this window too.
   const window = ledger.frames.filter((f) => Math.abs(f.t - t) <= 1.5).sort((a, b) => a.t - b.t);
   const byId = new Map(ledger.perception.map((p) => [p.frameId, p]));
   const speech = ledger.transcript.filter((s) => s.end >= t - 1.5 && s.start <= t + 1.5);
   return [
-    `Close look around the requested moment (focus: ${focus}). ${added.length} new frames extracted.`,
+    added.length || ledger.sprites?.length
+      ? `Close look around the requested moment (focus: ${focus}). ${added.length} new frames added.`
+      : `Close look around the requested moment (focus: ${focus}). This review was made before close-up stills were kept, so no new frames could be added; only the frames already sampled are listed.`,
     ...window.map((f) => {
       const p = byId.get(f.id);
       return `${f.id} @${f.t.toFixed(2)}s: ${p ? `${p.description} | on-screen text: ${p.onScreenText || "none"}` : "(not described)"}`;
@@ -68,21 +77,26 @@ export async function POST(req: Request, ctx: RouteContext<"/api/reviews/[id]/ch
   const found = await accessibleReview(id);
   const r = found?.review;
   if (!found || !r) return Response.json({ error: "Not found" }, { status: 404 });
+  if (mustSignIn(found.viewer)) return signInResponse("Log in to ask a reviewer.");
   if (!r.ledger) return Response.json({ error: "This review isn't ready yet." }, { status: 409 });
   if (!r.board.includes(parsed.data.reviewerId)) return Response.json({ error: "That reviewer isn't on this panel." }, { status: 400 });
   const profile = getProfile(parsed.data.reviewerId);
   if (!profile) return Response.json({ error: "That reviewer is no longer available." }, { status: 400 });
 
+  // On prepaid credits this sets the answer's worst case aside; it's settled when the answer ends.
+  let reservation: number | null;
   try {
-    await spendFollowup(whoIsCalling(req.headers, found.viewer.userId), id);
+    reservation = await spendFollowup(whoIsCalling(req.headers, found.viewer.userId), id);
   } catch (e) {
     if (e instanceof LimitReached) return limitResponse(e);
+    if (e instanceof NotEnoughCredits) return creditsResponse(e);
     throw e;
   }
 
   const ledger = r.ledger;
-  const history = await getThread(id, profile.id);
-  await addMessage(id, profile.id, "user", parsed.data.message);
+  // Questions that never got an answer are left out, so each turn pairs a question with its answer.
+  const history = answeredOnly(await getThread(id, profile.id));
+  const questionId = await addMessage(id, profile.id, "user", parsed.data.message);
 
   const system = followupSystem(profile, r.notes?.[profile.id], r.intent, ledger);
   const messages: Anthropic.Beta.BetaMessageParam[] = [
@@ -92,53 +106,64 @@ export async function POST(req: Request, ctx: RouteContext<"/api/reviews/[id]/ch
   const principleIds = new Set(profile.principles.map((p) => p.id));
 
   const encoder = new TextEncoder();
+  const answer = async (controller: ReadableStreamDefaultController) => {
+    const send = (obj: unknown) => controller.enqueue(encoder.encode(`${JSON.stringify(obj)}\n`));
+    let full = "";
+    let answered = false;
+    try {
+      for (let step = 0; step < 4; step++) {
+        let final: Anthropic.Beta.BetaMessage | null = null;
+        for await (const ev of streamText({
+          label: `followup:${profile.id}`,
+          reviewId: id,
+          model: MODELS.deep,
+          effort: "medium",
+          system,
+          messages,
+          tools: [INSPECT_TOOL],
+        })) {
+          if (ev.type === "text") {
+            full += ev.text;
+            send({ type: "text", text: ev.text });
+          } else final = ev.message;
+        }
+        if (!final || final.stop_reason !== "tool_use") break;
+        const results: Anthropic.Beta.BetaToolResultBlockParam[] = [];
+        for (const block of final.content) {
+          if (block.type !== "tool_use") continue;
+          const input = block.input as { seconds?: number; focus?: string };
+          if (typeof input.seconds !== "number") {
+            results.push({ type: "tool_result", tool_use_id: block.id, content: "seconds must be a number", is_error: true });
+            continue;
+          }
+          send({ type: "inspecting", seconds: input.seconds });
+          results.push({ type: "tool_result", tool_use_id: block.id, content: await inspect(r, ledger, input.seconds, input.focus ?? "") });
+        }
+        messages.push({ role: "assistant", content: final.content });
+        messages.push({ role: "user", content: results });
+        full += "\n\n";
+      }
+      const cleaned = cleanCitations(full.trim(), ledger, principleIds);
+      await addMessage(id, profile.id, "assistant", cleaned);
+      answered = true;
+      send({ type: "done", text: cleaned });
+    } catch (e) {
+      const message =
+        e instanceof AiUnavailable || e instanceof BudgetExceeded ? e.message : "The reviewer couldn't answer just now. Please try again.";
+      console.error("[chat]", e);
+      send({ type: "error", error: message });
+    } finally {
+      await settleQuestion(questionId, answered).catch((e) => console.error(`[chat] marking a question on ${id} failed:`, e));
+      controller.close();
+    }
+  };
   const body = new ReadableStream({
     async start(controller) {
-      const send = (obj: unknown) => controller.enqueue(encoder.encode(`${JSON.stringify(obj)}\n`));
-      let full = "";
+      if (reservation === null) return answer(controller);
       try {
-        for (let step = 0; step < 4; step++) {
-          let final: Anthropic.Beta.BetaMessage | null = null;
-          for await (const ev of streamText({
-            label: `followup:${profile.id}`,
-            reviewId: id,
-            model: MODELS.deep,
-            effort: "medium",
-            system,
-            messages,
-            tools: [INSPECT_TOOL],
-          })) {
-            if (ev.type === "text") {
-              full += ev.text;
-              send({ type: "text", text: ev.text });
-            } else final = ev.message;
-          }
-          if (!final || final.stop_reason !== "tool_use") break;
-          const results: Anthropic.Beta.BetaToolResultBlockParam[] = [];
-          for (const block of final.content) {
-            if (block.type !== "tool_use") continue;
-            const input = block.input as { seconds?: number; focus?: string };
-            if (typeof input.seconds !== "number") {
-              results.push({ type: "tool_result", tool_use_id: block.id, content: "seconds must be a number", is_error: true });
-              continue;
-            }
-            send({ type: "inspecting", seconds: input.seconds });
-            results.push({ type: "tool_result", tool_use_id: block.id, content: await inspect(r, ledger, input.seconds, input.focus ?? "") });
-          }
-          messages.push({ role: "assistant", content: final.content });
-          messages.push({ role: "user", content: results });
-          full += "\n\n";
-        }
-        const cleaned = cleanCitations(full.trim(), ledger, principleIds);
-        await addMessage(id, profile.id, "assistant", cleaned);
-        send({ type: "done", text: cleaned });
-      } catch (e) {
-        const message =
-          e instanceof AiUnavailable || e instanceof BudgetExceeded ? e.message : "The reviewer couldn't answer just now. Please try again.";
-        console.error("[chat]", e);
-        send({ type: "error", error: message });
+        await onReservation(reservation, () => answer(controller));
       } finally {
-        controller.close();
+        await settleReservation(reservation).catch((e) => console.error(`[credits] settling a follow-up on ${id} failed:`, e));
       }
     },
   });

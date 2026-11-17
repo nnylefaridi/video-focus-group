@@ -6,6 +6,8 @@ import { authReady, SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from "@/lib/supabas
 export { authReady };
 import { canAccess, claimAnonymous, getReview, type ReviewRecord } from "./reviews";
 import { enqueue } from "./jobs";
+import { kickNow } from "./kick";
+import { isHosted } from "./config";
 
 export async function supabaseServer() {
   const store = await cookies();
@@ -39,6 +41,19 @@ export async function getViewer(): Promise<Viewer> {
   return { userId: claims?.sub ?? null, email: typeof claims?.email === "string" ? claims.email : null, anonId };
 }
 
+/**
+ * Hosted mode: nothing paid (a review, an upload, a retry, a follow-up) runs for someone
+ * who isn't signed in. Answer checks are the exception; they're capped per network.
+ */
+export function mustSignIn(viewer: Pick<Viewer, "userId">): boolean {
+  return isHosted() && !viewer.userId;
+}
+
+/** What a route sends back when it needs sign-in first. The flow shows a Log in link for it. */
+export function signInResponse(message = "Log in to send your video to the board.") {
+  return Response.json({ error: message, login: true }, { status: 401 });
+}
+
 /** Route handlers only: the browser's anonymous id, created on first use. */
 export async function ensureAnonId(viewer: Viewer): Promise<string> {
   if (viewer.anonId) return viewer.anonId;
@@ -51,7 +66,9 @@ export async function ensureAnonId(viewer: Viewer): Promise<string> {
 export async function claimForViewer(viewer: Viewer) {
   if (!viewer.userId || !viewer.anonId) return;
   const claimed = await claimAnonymous(viewer.userId, viewer.anonId);
-  for (const r of claimed) if (r.stage === "done") await enqueue(r.id, "store");
+  const finished = claimed.filter((r) => r.stage === "done");
+  for (const r of finished) await enqueue(r.id, "store");
+  if (finished.length) kickNow();
 }
 
 /**

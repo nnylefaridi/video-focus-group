@@ -21,7 +21,7 @@ export function Puppet({
   id: string;
   name: string;
   state?: PuppetState;
-  /** Stick length below the figure, as a fraction of the figure's height. */
+  /** Stick length below the figure, as a fraction of the figure's height. 0 draws no stick. */
   stick?: number;
   delay?: number;
   className?: string;
@@ -63,17 +63,19 @@ export function Puppet({
     >
       <div className="puppet-jolt relative" data-jolt={jolt || undefined} style={{ transformOrigin: origin }}>
         {/* the popsicle stick, behind the cutout */}
-        <div
-          aria-hidden
-          className="absolute left-1/2 -translate-x-1/2 rounded-full"
-          style={{
-            top: "78%",
-            width: "8%",
-            height: `${stick * 100 + 24}%`,
-            background: "var(--wood)",
-            boxShadow: "inset -3px 0 0 rgb(150 110 60 / 0.22), inset 2px 0 0 rgb(255 255 255 / 0.35), 0 2px 5px rgb(40 52 70 / 0.2)",
-          }}
-        />
+        {stick > 0 && (
+          <div
+            aria-hidden
+            className="absolute left-1/2 -translate-x-1/2 rounded-full"
+            style={{
+              top: "78%",
+              width: "8%",
+              height: `${stick * 100 + 24}%`,
+              background: "var(--wood)",
+              boxShadow: "inset -3px 0 0 rgb(150 110 60 / 0.22), inset 2px 0 0 rgb(255 255 255 / 0.35), 0 2px 5px rgb(40 52 70 / 0.2)",
+            }}
+          />
+        )}
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={`/reviewers/${id}.png`} alt={name} className="relative block h-auto w-full drop-shadow-sm" draggable={false} />
       </div>

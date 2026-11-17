@@ -1,0 +1,46 @@
+# Render Blueprint for the hosted site: one free web service. See docs/hosting.md ("Render").
+# Render → New → Blueprint → pick this repo. Values marked sync: false are asked for once, in the
+# dashboard; they're never written here. Nothing deploys from this file until you apply it.
+services:
+  - type: web
+    name: video-focus-group
+    runtime: docker
+    plan: free            # 512 MB RAM, 0.1 CPU, no disk, sleeps after 15 minutes without visits
+    region: ohio          # pick the region closest to your Supabase project
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
+    envVars:
+      - key: PANEL_MODE
+        value: hosted
+      # server.js listens here (the Dockerfile's HOSTNAME is 0.0.0.0).
+      - key: PORT
+        value: "8080"
+      # Render serves every site through Cloudflare, which sets CF-Connecting-IP to the visitor's
+      # address on every request (Render keeps whatever X-Forwarded-For the visitor sent).
+      - key: CLIENT_IP_HEADER
+        value: CF-Connecting-IP
+      # Supabase's free plan caps each stored file at 50 MB.
+      - key: MAX_UPLOAD_MB
+        value: "50"
+      # Public, built into the pages (Render passes these to the Docker build as build arguments).
+      - key: NEXT_PUBLIC_SUPABASE_URL
+        sync: false
+      - key: NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+        sync: false
+      # Secrets, read only at run time.
+      - key: HOSTED_PUBLIC_URL     # https://<service>.onrender.com, or your own domain
+        sync: false
+      - key: SUPABASE_SECRET_KEY
+        sync: false
+      - key: DATABASE_URL          # Supabase's pooler connection string
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: KEY_ENCRYPTION_SECRET # openssl rand -base64 32
+        sync: false
+      - key: MEDIA_SECRET          # openssl rand -base64 32
+        sync: false
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false

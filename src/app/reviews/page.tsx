@@ -5,9 +5,10 @@ import { connection } from "next/server";
 import { listReviewsFor } from "@/server/reviews";
 import { getProfile } from "@/experts/load";
 import { STAGE_LABELS } from "@/core/review";
-import { spendSummary, usageFor } from "@/server/budget";
+import { ownKeySpendThisMonth, spendSummary, usageFor } from "@/server/budget";
 import { authReady, claimForViewer, getViewer } from "@/server/auth";
 import { whoIsCalling } from "@/server/client";
+import { isHosted } from "@/server/config";
 import { SignOut } from "@/components/account/SignOut";
 
 const isOwner = (email: string | null) =>
@@ -35,6 +36,7 @@ async function Usage({ email, userId }: { email: string | null; userId: string |
   const u = await usageFor(whoIsCalling(await headers(), userId));
   // Your own computer (local mode) or your own email: show what the app has spent.
   const owner = !authReady || isOwner(email) ? await spendSummary() : null;
+  const ownKeys = owner && isHosted() ? await ownKeySpendThisMonth() : 0;
   const m = (n: number) => `$${n.toFixed(2)}`;
   return (
     <section aria-labelledby="usage" className="cutout mt-6 space-y-4 p-5">
@@ -47,6 +49,7 @@ async function Usage({ email, userId }: { email: string | null; userId: string |
       {owner && (
         <p className="border-t border-line pt-3 text-sm font-semibold text-ink-soft">
           App API spend: {m(owner.today)} of {m(owner.dailyLimit)} today · {m(owner.month)} of {m(owner.monthlyLimit)} this month
+          {ownKeys > 0 && <> · plus {m(ownKeys)} this month on people&apos;s own keys, which doesn&apos;t count toward these</>}
         </p>
       )}
     </section>
@@ -97,11 +100,19 @@ async function List({ userId }: { userId: string | null }) {
 
 /** Signed out: explain why an account is needed, and send them to log in. */
 function LoginGate() {
+  // Hosted mode: reviews are only made signed in, so there's nothing in this browser to move.
+  const hosted = isHosted();
   return (
     <div className="cutout-lift mt-8 -rotate-[0.3deg] p-6 sm:p-8">
-      <h2 className="font-display text-xl font-extrabold text-ink">Log in to keep a record of your reviews</h2>
+      <h2 className="font-display text-xl font-extrabold text-ink">{hosted ? "Log in to see your reviews" : "Log in to keep a record of your reviews"}</h2>
       <p className="mt-2 text-ink-soft">
-        Without an account, a review stays with the browser that made it and isn&apos;t listed anywhere. Log in or sign up, and the reviews you&apos;ve made in this browser, with their videos, move into your account.
+        {hosted ? (
+          <>Your reviews, their videos and your follow-up chats are kept in your account.</>
+        ) : (
+          <>
+            Without an account, a review stays with the browser that made it and isn&apos;t listed anywhere. Log in or sign up, and the reviews you&apos;ve made in this browser, with their videos, move into your account.
+          </>
+        )}
       </p>
       <Link href="/login?next=/reviews" className="mt-5 inline-block rounded-full bg-accent px-6 py-2.5 font-bold text-accent-ink transition-all hover:brightness-110">
         Log in or sign up
@@ -128,6 +139,14 @@ async function Account() {
     <>
       <p className="mt-2 text-sm text-ink-soft">
         {viewer.email ? <>Signed in as {viewer.email} · </> : null}
+        {isHosted() && (
+          <>
+            <Link href="/account" className="font-semibold underline decoration-line-strong underline-offset-4 hover:text-ink">
+              Your account
+            </Link>
+            {" · "}
+          </>
+        )}
         <SignOut />
       </p>
       <Usage email={viewer.email} userId={viewer.userId} />

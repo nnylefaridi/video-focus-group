@@ -1,7 +1,38 @@
+"use client";
+
+import { usePathname } from "next/navigation";
+import { useEffect, useSyncExternalStore } from "react";
 import { Cup } from "./Icons";
+
+// Whether the flow on the start page has moved past its first screen (the first question,
+// nothing answered yet). That screen is only the question and its answer box, so the tag
+// stays off it. The server always renders the start page as that first screen.
+let pastFirstScreen = false;
+const listeners = new Set<() => void>();
+const subscribe = (l: () => void) => (listeners.add(l), () => void listeners.delete(l));
+function setPastFirstScreen(v: boolean) {
+  if (v === pastFirstScreen) return;
+  pastFirstScreen = v;
+  listeners.forEach((l) => l());
+}
+
+/** Used by the flow: tells the tag whether the first screen is showing. */
+export function useFirstScreen(first: boolean) {
+  useEffect(() => {
+    setPastFirstScreen(!first);
+    return () => setPastFirstScreen(false);
+  }, [first]);
+}
+
+export function showCoffeeLink(pathname: string, pastFirst: boolean): boolean {
+  return pathname !== "/" || pastFirst;
+}
 
 /** A small paper tag in the corner: bottom-right on desktop, top-right on phones (clear of the review tab bar). */
 export function CoffeeLink() {
+  const pathname = usePathname();
+  const pastFirst = useSyncExternalStore(subscribe, () => pastFirstScreen, () => false);
+  if (!showCoffeeLink(pathname, pastFirst)) return null;
   return (
     <a
       href="https://buymeacoffee.com/nylefaridi"

@@ -61,6 +61,8 @@ export async function interpretAnswer(q: QuestionNode, raw: string, known: Inten
 
   const out = await callStructured({
     label: `interpret:${q.id}`,
+    // Answer checks belong to no review: they run on the server's key.
+    reviewId: null,
     model: MODELS.fast,
     system: SYSTEM,
     maxTokens: 1500,
