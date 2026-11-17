@@ -20,8 +20,8 @@ const profile = {
   principles: [{ id: "x-1", status: "verified", statement: "s", refs: [], confidence: "well_documented", dimensions: ["comedy"], excerpt: "Is this anything at all, really" }],
 } as unknown as ExpertProfile;
 
-const rec = (change: string, why = "because") => ({
-  id: "r1", change, why, evidenceIds: ["T01"], principleIds: ["x-1"], basis: "application" as const, priority: "high" as const, confidence: "firm" as const,
+const rec = (change: string, why = "because", basis: "documented" | "application" | "general" = "application") => ({
+  id: "r1", change, why, evidenceIds: ["T01"], principleIds: ["x-1"], basis, priority: "high" as const, confidence: "firm" as const,
 });
 const notes = (recs: ReturnType<typeof rec>[], claim = "Your opening line is a greeting.") => ({
   overall: "ok",
@@ -51,5 +51,15 @@ describe("validators", () => {
     const o = validateNotes(notes([]), ledger, profile).notes.observations[0];
     expect(o.evidenceIds).toEqual(["T01"]);
     expect(o.principleIds).toEqual(["x-1"]);
+  });
+  it("keeps a documented basis when the principle id is valid", () => {
+    const out = validateNotes(notes([rec("Cut the greeting.", "because", "documented")]), ledger, profile);
+    expect(out.notes.recommendations[0]?.basis).toBe("documented");
+    expect(out.report.fixed.join(" ")).not.toMatch(/relabeled/);
+  });
+  it("relabels a documented item as general when no verified principle remains", () => {
+    const out = validateNotes(notes([{ ...rec("Cut the greeting.", "because", "documented"), principleIds: ["nope"] }]), ledger, profile);
+    expect(out.notes.recommendations[0]?.basis).toBe("general");
+    expect(out.notes.recommendations[0]?.principleIds).toEqual([]);
   });
 });

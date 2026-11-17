@@ -7,6 +7,12 @@
  * Seeded defects: list known problems per review in tests/eval/labels.json, e.g.
  *   { "<review-id>": [{ "defect": "slow hook", "start": 0, "end": 3 }] }
  * A defect counts as found when a reviewer flags a problem whose evidence overlaps that window.
+ *
+ * Basis columns are every value the reviewer schema allows, plus any other value
+ * stored on the items. They count the stored `basis` field.
+ * Time per review is the completed process job (started_at to finished_at), which
+ * ends when the review reaches stage done. updated_at is not used, because
+ * follow-up chat moves it later.
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -14,6 +20,7 @@ import { q } from "../src/server/db";
 import { getReview, type ReviewRecord } from "../src/server/reviews";
 import { deriveSpan } from "../src/core/evidence";
 import { getProfile } from "../src/experts/load";
+import { basisSummary, describeProcessingTime, documentedGapNote, evalRows, parseJobStamp, pct, scoreNotes, type ReviewerScore } from "./eval-metrics";
 
 const PREDICTION = /\b(go(es|ing)? viral|guarantee[ds]?\b|will (definitely|certainly|surely) (sell|convert|perform|blow up)|(million|thousand)s? of views)/i;
 const AI_ISM = /\b(great question|it's worth noting|additionally|furthermore|in conclusion|let's dive|i'd recommend|leverage|crucial|key takeaway|elevate|compelling|resonate)\b/i;
@@ -43,10 +50,7 @@ const jaccard = (a: Set<string>, b: Set<string>) => {
   const inter = [...a].filter((x) => b.has(x)).length;
   return inter / Math.max(1, a.size + b.size - inter);
 };
-const pct = (n: number, d: number) => (d ? `${Math.round((n / d) * 100)}%` : "–");
-
-type Row = { review: string; reviewer: string; obs: number; recs: number; cited: string; documented: string; general: string; dropped: number; generic: number; aiisms: number; predictions: number };
-const rows: Row[] = [];
+const scores: ReviewerScore[] = [];
 const overlaps: string[] = [];
 let found = 0;
 let seeded = 0;
@@ -55,17 +59,11 @@ const missed: string[] = [];
 for (const r of reviews) {
   const ledger = r.ledger!;
   for (const [rid, n] of Object.entries(r.notes ?? {})) {
-    const items = [...n.observations, ...n.recommendations];
-    const framed = items.filter((x) => x.basis !== "general");
     const texts = [n.overall, ...n.observations.map((o) => o.claim), ...n.recommendations.map((x) => `${x.change} ${x.why}`)];
-    rows.push({
+    scores.push({
       review: r.id.slice(0, 6),
       reviewer: getProfile(rid)?.name ?? rid,
-      obs: n.observations.length,
-      recs: n.recommendations.length,
-      cited: pct(framed.filter((x) => x.principleIds.length > 0).length, framed.length),
-      documented: pct(items.filter((x) => x.basis === "documented").length, items.length),
-      general: pct(items.filter((x) => x.basis === "general").length, items.length),
+      ...scoreNotes(n),
       dropped: r.validation?.[rid]?.dropped.length ?? 0,
       generic: texts.filter((t) => GENERIC.test(t)).length,
       aiisms: texts.filter((t) => AI_ISM.test(t)).length + (r.discussion ?? []).filter((t) => t.reviewerId === rid && AI_ISM.test(t.text)).length,
@@ -96,15 +94,22 @@ for (const r of reviews) {
 }
 
 console.log(`\nEvaluated ${reviews.length} review(s)\n`);
+const rows = evalRows(scores);
 console.table(rows);
+console.log(basisSummary(scores));
+const basisNote = documentedGapNote(scores);
+if (basisNote) console.log(basisNote);
 const cost = reviews.map((r) => r.cost.usd);
-const mins = reviews.map((r) => (r.updatedAt - r.createdAt) / 60000);
+const jobRows = await q<{ review_id: unknown; kind: unknown; status: unknown; started_at: unknown; finished_at: unknown }>(
+  `SELECT review_id, kind, status, started_at, finished_at FROM app.jobs WHERE review_id IN (${reviews.map((_, i) => `$${i + 1}`).join(", ")})`,
+  reviews.map((r) => r.id),
+);
 console.log(`Cost per review: avg $${(cost.reduce((a, b) => a + b, 0) / cost.length).toFixed(2)}, max $${Math.max(...cost).toFixed(2)}`);
-console.log(`Time per review: avg ${(mins.reduce((a, b) => a + b, 0) / mins.length).toFixed(1)} min`);
+console.log(describeProcessingTime(reviews.map((r) => r.id), jobRows.map(parseJobStamp)));
 console.log(`Seeded-defect recall: ${seeded ? `${found}/${seeded} (${pct(found, seeded)})` : "no labels in tests/eval/labels.json"}`);
 if (missed.length) console.log(`Missed:\n  ${missed.join("\n  ")}`);
 console.log(overlaps.length ? `Low distinctiveness:\n  ${overlaps.join("\n  ")}` : "Distinctiveness: no reviewer pairs with near-identical advice.");
-const problems = rows.filter((r) => r.predictions > 0 || r.generic > 1);
+const problems = scores.filter((r) => r.predictions > 0 || r.generic > 1);
 if (problems.length) console.log(`Needs attention: ${problems.map((p) => `${p.reviewer} on ${p.review}`).join(", ")}`);
 
 // Blind identification sheet: each reviewer's take with names hidden, answer key separate.
