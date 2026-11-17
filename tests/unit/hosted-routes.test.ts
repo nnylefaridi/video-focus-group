@@ -30,10 +30,11 @@ vi.mock("next/headers", () => ({
 vi.mock("@supabase/ssr", () => ({
   createServerClient: () => ({ auth: { getClaims: async () => ({ data: state.user ? { claims: state.user } : null }) } }),
 }));
-// Signed in, the account can pay; choosing how is covered in payment.test.ts.
+// Signed in, the account can pay (here with its own key, so no credit balance is needed);
+// choosing how is covered in payment.test.ts, credits in credits.test.ts.
 vi.mock("@/server/billing", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/server/billing")>()),
-  getPaymentContext: async () => ({ method: "credits", ready: true, problem: null }),
+  getPaymentContext: async () => ({ method: "own_key", ready: true, problem: null, key: { last4: "abcd", savedAt: 1, rejected: false } }),
 }));
 
 let reviewsRoute: typeof import("@/app/api/reviews/route");

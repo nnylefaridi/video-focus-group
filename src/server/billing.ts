@@ -1,6 +1,8 @@
 import { one, q } from "./db";
 import { getKeyInfo, KEY_REJECTED, type KeyInfo } from "./apikeys";
 import { NEEDS_KEY } from "@/core/ownkey";
+import { needsCreditsMessage, type CreditSummary } from "@/core/credits";
+import { creditsProblem, creditSummary } from "./credits";
 
 /**
  * Hosted mode: how an account pays for its reviews. Local mode never asks; reviews
@@ -31,20 +33,23 @@ export async function setPaymentMethod(userId: string, method: PaymentMethod): P
  * What pays for this account's next review, decided here on the server (never by the
  * browser). `ready` is false with a plain `problem` when the chosen way can't pay yet.
  */
-export type PaymentContext = { method: PaymentMethod | null; ready: boolean; problem: string | null; key: KeyInfo | null };
+export type PaymentContext = { method: PaymentMethod | null; ready: boolean; problem: string | null; key: KeyInfo | null; credits: CreditSummary };
 
 export const CHOOSE_FIRST = "Choose how to pay for reviews first.";
-export const NEEDS_CREDITS = "Add credits first. Your balance is empty.";
+export const NEEDS_CREDITS = needsCreditsMessage({ available: 0, reviewReserve: 0 });
 export { NEEDS_KEY };
 
 export async function getPaymentContext(userId: string): Promise<PaymentContext> {
-  const [method, key] = await Promise.all([getPaymentMethod(userId), getKeyInfo(userId)]);
-  if (!method) return { method, ready: false, problem: CHOOSE_FIRST, key };
-  // No balance exists for any account yet, so credits can't pay.
-  if (method === "credits") return { method, ready: false, problem: NEEDS_CREDITS, key };
-  if (!key) return { method, ready: false, problem: NEEDS_KEY, key };
-  if (key.rejected) return { method, ready: false, problem: KEY_REJECTED, key };
-  return { method, ready: true, problem: null, key };
+  const [method, key, credits] = await Promise.all([getPaymentMethod(userId), getKeyInfo(userId), creditSummary(userId)]);
+  const base = { method, key, credits };
+  if (!method) return { ...base, ready: false, problem: CHOOSE_FIRST };
+  if (method === "credits") {
+    const problem = creditsProblem(credits);
+    return { ...base, ready: !problem, problem };
+  }
+  if (!key) return { ...base, ready: false, problem: NEEDS_KEY };
+  if (key.rejected) return { ...base, ready: false, problem: KEY_REJECTED };
+  return { ...base, ready: true, problem: null };
 }
 
 /** What a route sends back when the account can't pay for a review. The flow shows the payment step for it. */

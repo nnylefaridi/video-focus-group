@@ -10,6 +10,8 @@ import type { PaymentContext } from "@/server/billing";
 import { LoginHint } from "./LoginHint";
 import { PAYMENT_LABELS } from "./PaymentStep";
 import { ApiKeyPanel } from "../account/ApiKeyPanel";
+import { CreditsPanel } from "../account/CreditsPanel";
+import { formatMicros } from "@/core/credits";
 
 const MAX_BYTES = 250 * 1024 * 1024;
 const ACCEPT = "video/mp4,video/quicktime,video/webm,.mp4,.mov,.m4v,.webm";
@@ -74,6 +76,11 @@ export function UploadStep({
     if (!res.ok) {
       setProgress(null);
       setLoginHelps(Boolean(data.login));
+      // Credits ran short since this page loaded: show where to add them.
+      if (data.payment === "credits" && onPaymentChange) {
+        const fresh = await fetch("/api/credits").then((r) => (r.ok ? r.json() : null)).catch(() => null);
+        if (fresh?.payment) onPaymentChange(fresh.payment as PaymentContext);
+      }
       return setError(data.error ?? "Couldn't start the review.");
     }
     const up = await uploadWithProgress(`/api/reviews/${data.id}/video`, file, setProgress);
@@ -98,7 +105,8 @@ export function UploadStep({
       {payment?.method && (
         <p className="mt-2 text-sm text-ink-soft">
           Paying with {PAYMENT_LABELS[payment.method]}
-          {payment.method === "own_key" && payment.ready && payment.key ? ` (ending in ${payment.key.last4})` : ""}.
+          {payment.method === "own_key" && payment.ready && payment.key ? ` (ending in ${payment.key.last4})` : ""}
+          {payment.method === "credits" && payment.ready ? ` (${formatMicros(payment.credits.available)} free)` : ""}.
           {onChangePayment && (
             <button
               onClick={onChangePayment}
@@ -115,6 +123,11 @@ export function UploadStep({
         <div className="cutout mt-8 p-5">
           <p className="mb-4 text-sm font-semibold text-ink-soft">{payment.problem}</p>
           <ApiKeyPanel initial={payment.key} onChange={onPaymentChange} />
+        </div>
+      ) : payment && !payment.ready && payment.method === "credits" && onPaymentChange ? (
+        <div className="cutout mt-8 p-5">
+          <p className="mb-4 text-sm font-semibold text-ink-soft">{payment.problem}</p>
+          <CreditsPanel initial={payment} from="flow" onChange={onPaymentChange} />
         </div>
       ) : payment && !payment.ready ? (
         <p role="alert" className="mt-8 rounded-xl bg-warn-soft px-4 py-3 text-sm text-warn">

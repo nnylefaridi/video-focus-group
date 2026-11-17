@@ -36,6 +36,8 @@ const HOSTED = {
   HOSTED_PUBLIC_URL: "https://panel.example.com",
   CLIENT_IP_HEADER: "Fly-Client-IP",
   KEY_ENCRYPTION_SECRET: Buffer.alloc(32, 7).toString("base64"),
+  STRIPE_SECRET_KEY: "sk_test_51abcdefghijklmnop",
+  STRIPE_WEBHOOK_SECRET: "whsec_abcdefghijklmnop",
 };
 
 const without = (...keys: string[]) => Object.fromEntries(Object.entries(HOSTED).filter(([k]) => !keys.includes(k)));
@@ -101,8 +103,20 @@ describe("what hosted mode needs before it starts", () => {
       "DATABASE_URL",
       "HOSTED_PUBLIC_URL",
       "KEY_ENCRYPTION_SECRET",
+      "STRIPE_SECRET_KEY",
+      "STRIPE_WEBHOOK_SECRET",
       "CLIENT_IP_HEADER (or TRUSTED_PROXIES)",
     ]);
+  });
+
+  it("needs Stripe's secret key and webhook signing secret, and says which is wrong", () => {
+    expect(hostedProblems(without("STRIPE_SECRET_KEY")).missing).toEqual(["STRIPE_SECRET_KEY"]);
+    expect(hostedProblems(without("STRIPE_WEBHOOK_SECRET")).missing).toEqual(["STRIPE_WEBHOOK_SECRET"]);
+    for (const ok of ["sk_live_abc123", "sk_test_abc123", "rk_live_abc123"]) expect(hostedProblems({ ...HOSTED, STRIPE_SECRET_KEY: ok }).invalid).toEqual([]);
+    // A publishable key can't take payments, and a webhook secret isn't an API key.
+    for (const bad of ["pk_live_abc123", "whsec_abc", "sk_abc"]) expect(hostedProblems({ ...HOSTED, STRIPE_SECRET_KEY: bad }).invalid[0]).toMatch(/^STRIPE_SECRET_KEY must be the secret key/);
+    expect(hostedProblems({ ...HOSTED, STRIPE_WEBHOOK_SECRET: "sk_test_abc" }).invalid[0]).toMatch(/^STRIPE_WEBHOOK_SECRET must be the webhook endpoint's signing secret, starting whsec_/);
+    expect(() => checkStartup(without("STRIPE_WEBHOOK_SECRET"))).toThrow(/These settings are missing:\n {2}- STRIPE_WEBHOOK_SECRET/);
   });
 
   it("needs KEY_ENCRYPTION_SECRET to be 32 bytes as base64 or hex", () => {
@@ -220,7 +234,7 @@ describe("starting Panel", () => {
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "panel-start-"));
     return { cwd, ...spawnSync(process.execPath, args, { cwd, env: { PATH: process.env.PATH ?? "", NODE_ENV: "production", ...env }, encoding: "utf8", timeout: 60_000 }) };
   };
-  const missingAll = /These settings are missing:\n {2}- NEXT_PUBLIC_SUPABASE_URL\n {2}- NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY\n {2}- SUPABASE_SECRET_KEY\n {2}- DATABASE_URL\n {2}- HOSTED_PUBLIC_URL\n {2}- KEY_ENCRYPTION_SECRET\n {2}- CLIENT_IP_HEADER \(or TRUSTED_PROXIES\)/;
+  const missingAll = /These settings are missing:\n {2}- NEXT_PUBLIC_SUPABASE_URL\n {2}- NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY\n {2}- SUPABASE_SECRET_KEY\n {2}- DATABASE_URL\n {2}- HOSTED_PUBLIC_URL\n {2}- KEY_ENCRYPTION_SECRET\n {2}- STRIPE_SECRET_KEY\n {2}- STRIPE_WEBHOOK_SECRET\n {2}- CLIENT_IP_HEADER \(or TRUSTED_PROXIES\)/;
 
   it("stops the website, naming what's missing", () => {
     const r = run([path.join(ROOT, "server.mjs")], { PANEL_MODE: "hosted" });

@@ -7,7 +7,7 @@ import { isHosted } from "@/server/config";
 const Body = z.object({ method: z.enum(PAYMENT_METHODS) });
 
 /** Hosted mode only: local mode always uses the server's own key, so there's nothing to choose. */
-const localOnly = () => Response.json({ error: "Choosing how to pay is only for the hosted site. This copy of Panel uses its own API key." }, { status: 404 });
+const localOnly = () => Response.json({ error: "Choosing how to pay is only for the hosted site. This copy of Video Focus Group uses its own API key." }, { status: 404 });
 
 /** How this account pays for reviews, and whether that way can pay right now. */
 export async function GET() {

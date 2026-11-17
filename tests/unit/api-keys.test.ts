@@ -90,9 +90,11 @@ let retryRoute: typeof import("@/app/api/reviews/[id]/retry/route");
 let reviews: typeof import("@/server/reviews");
 let db: typeof import("@/server/db");
 let budget: typeof import("@/server/budget");
+let credits: typeof import("@/server/credits");
 let board: string[];
 
 beforeAll(async () => {
+  credits = await import("@/server/credits");
   vault = await import("@/server/keyvault");
   keys = await import("@/server/apikeys");
   billing = await import("@/server/billing");
@@ -158,6 +160,11 @@ async function ownKeyReview(tag: string) {
   const id = reviews.newReviewId();
   await reviews.createReview({ id, answers: [], intent: { category: "creator" }, board, title: "t", userId, paidWith: "own_key" });
   return { userId, key, id };
+}
+/** A credits account needs credit before a credits review can start (credits.test.ts covers how it's bought). */
+async function giveCredit(userId: string) {
+  await db.tx((t) => credits.creditTopup(t, { userId, sessionId: `cs_test_${userId}`, paymentIntent: null, amountCents: 2500, eventId: `evt_${userId}`, pack: "usd25" }));
+  return userId;
 }
 const call = (reviewId: string | null = null) => ai.callStructured({ label: "test", reviewId, model: ai.MODELS.fast, system: "s", messages: [{ role: "user", content: "hi" }], schema: z.object({ ok: z.boolean() }) });
 
@@ -459,7 +466,7 @@ describe("spending caps for reviews on their own key", () => {
     // The server's key still has its budget: answer checks and credits reviews go ahead.
     await expect(budget.assertWithinSpendLimits()).resolves.toBeTruthy();
     await expect(call()).resolves.toEqual({ ok: true });
-    await expect(start(signIn(), "credits")).resolves.toBeUndefined();
+    await expect(start(await giveCredit(signIn()), "credits")).resolves.toBeUndefined();
 
     // This review's own cost cap still applies to it.
     await expect(call(id)).rejects.toBeInstanceOf(ai.BudgetExceeded);
@@ -470,24 +477,27 @@ describe("spending caps for reviews on their own key", () => {
   });
 
   it("tags server-key calls with how their review is paid, and keeps the app's caps on them only", async () => {
-    const user = signIn();
-    const credits = reviews.newReviewId();
-    await reviews.createReview({ id: credits, answers: [], intent: {}, board, title: "t", userId: user, paidWith: "credits" });
-    await call(credits);
-    expect((await db.q<{ p: string }>("SELECT paid_with::text AS p FROM app.spend WHERE review_id = $1", [credits]))[0].p).toBe("credits");
+    const user = await giveCredit(signIn());
+    const creditsReview = reviews.newReviewId();
+    await reviews.createReview({ id: creditsReview, answers: [], intent: {}, board, title: "t", userId: user, paidWith: "credits" });
+    // A credits review's calls run on credit set aside for it, as the worker does.
+    const reservation = await credits.reserve(user, creditsReview, "review");
+    const callOnCredit = () => credits.onReservation(reservation, () => call(creditsReview));
+    await callOnCredit();
+    expect((await db.q<{ p: string }>("SELECT paid_with::text AS p FROM app.spend WHERE review_id = $1", [creditsReview]))[0].p).toBe("credits");
 
     const own = await ownKeyReview("stillgoing");
     await budget.recordSpend({ label: "test-global-cap", model: ai.MODELS.fast, usd: 1000, paidWith: null });
     try {
       // The server's key is out of budget...
       await expect(call()).rejects.toBeInstanceOf(ai.BudgetExceeded);
-      await expect(call(credits)).rejects.toBeInstanceOf(ai.BudgetExceeded);
-      await expect(start(signIn(), "credits")).rejects.toThrow(/budget/);
-      await expect(budget.spendFollowup(who(user), credits)).rejects.toThrow(/budget/);
-      // ...but reviews and follow-ups on someone's own key don't use it.
+      await expect(callOnCredit()).rejects.toBeInstanceOf(ai.BudgetExceeded);
+      await expect(start(await giveCredit(signIn()), "credits")).rejects.toThrow(/budget/);
+      await expect(budget.spendFollowup(who(user), creditsReview)).rejects.toThrow(/budget/);
+      // ...but reviews and follow-ups on someone's own key don't use it, and set no credit aside.
       await expect(call(own.id)).resolves.toEqual({ ok: true });
       await expect(start(signIn(), "own_key")).resolves.toBeUndefined();
-      await expect(budget.spendFollowup(who(own.userId), own.id)).resolves.toBeUndefined();
+      await expect(budget.spendFollowup(who(own.userId), own.id)).resolves.toBeNull();
     } finally {
       await db.q("DELETE FROM app.spend WHERE label = 'test-global-cap'");
     }

@@ -23,7 +23,7 @@ process.env.PANEL_PEER_HEADER = "x-panel-peer-test";
 const state = vi.hoisted(() => ({
   cookies: new Map<string, string>(),
   user: null as null | { sub: string; email: string },
-  /** Stands in for a balance (Task 4) when a test needs a way that can pay. Own keys are tested for real in api-keys.test.ts. */
+  /** Stands in for a saved own key when a test needs one. Own keys are tested for real in api-keys.test.ts, credits in credits.test.ts. */
   canPay: null as null | PaymentContext,
 }));
 vi.mock("next/headers", () => ({
@@ -48,9 +48,11 @@ let reviewsRoute: typeof import("@/app/api/reviews/route");
 let retryRoute: typeof import("@/app/api/reviews/[id]/retry/route");
 let reviews: typeof import("@/server/reviews");
 let db: typeof import("@/server/db");
+let credits: typeof import("@/server/credits");
 let board: string[];
 
 beforeAll(async () => {
+  credits = await import("@/server/credits");
   billing = await import("@/server/billing");
   paymentRoute = await import("@/app/api/account/payment/route");
   reviewsRoute = await import("@/app/api/reviews/route");
@@ -125,8 +127,8 @@ describe("remembering the choice", () => {
 
     const res = await paymentRoute.POST(post("/api/account/payment", { method: "own_key" }));
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ method: "own_key", ready: false, problem: billing.NEEDS_KEY, key: null });
-    expect(await (await paymentRoute.GET()).json()).toEqual({ method: "own_key", ready: false, problem: billing.NEEDS_KEY, key: null });
+    expect(await res.json()).toMatchObject({ method: "own_key", ready: false, problem: billing.NEEDS_KEY, key: null, credits: { balance: 0 } });
+    expect(await (await paymentRoute.GET()).json()).toMatchObject({ method: "own_key", ready: false, problem: billing.NEEDS_KEY, key: null });
     expect(await billing.getPaymentMethod(user)).toBe("own_key");
   });
 });
@@ -165,20 +167,22 @@ describe("making a review", () => {
 
   it("goes ahead for the account once its way can pay", async () => {
     const user = signIn();
-    state.canPay = { method: "credits", ready: true, problem: null, key: null };
+    await billing.setPaymentMethod(user, "credits");
+    await db.tx((t) => credits.creditTopup(t, { userId: user, sessionId: `cs_test_${user}`, paymentIntent: null, amountCents: 1000, eventId: `evt_${user}`, pack: "usd10" }));
     const res = await makeReview();
     expect(res.status).toBe(200);
     expect((await reviews.getReview((await res.json()).id))?.userId).toBe(user);
   });
 
   it("doesn't need the server's key when the account pays with its own", async () => {
-    signIn();
-    state.canPay = { method: "own_key", ready: true, problem: null, key: { last4: "abcd", savedAt: 1, rejected: false } };
+    const user = signIn();
+    const summary = await credits.creditSummary(user);
+    state.canPay = { method: "own_key", ready: true, problem: null, key: { last4: "abcd", savedAt: 1, rejected: false }, credits: summary };
     const key = process.env.ANTHROPIC_API_KEY;
     delete process.env.ANTHROPIC_API_KEY;
     try {
       expect((await makeReview()).status).toBe(200);
-      state.canPay = { method: "credits", ready: true, problem: null, key: null };
+      state.canPay = { method: "credits", ready: true, problem: null, key: null, credits: summary };
       expect((await makeReview()).status).toBe(503);
     } finally {
       process.env.ANTHROPIC_API_KEY = key;

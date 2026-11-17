@@ -6,6 +6,8 @@ import { COST_CAP_USD } from "@/server/config";
 import { assertWithinSpendLimits, LimitReached, recordSpend } from "@/server/budget";
 import { KEY_FORBIDDEN, KEY_REJECTED, KEY_REMOVED, markKeyRejected, reviewKey } from "@/server/apikeys";
 import type { PaymentMethod } from "@/server/billing";
+import sharp from "sharp";
+import { currentReservation, holdForCall, NotEnoughCredits, releaseHold, ReservationUsed, usdToMicros, type Hold } from "@/server/credits";
 
 export const MODELS = {
   fast: "claude-haiku-5-5",
@@ -82,6 +84,66 @@ function priceOf(model: ModelId, usage: Anthropic.Beta.BetaUsage): number {
   return (usage.input_tokens * i + usage.output_tokens * o + (usage.cache_read_input_tokens ?? 0) * c + cacheWrite) / 1e6;
 }
 
+/** Tokens an image can take: Anthropic counts about width x height / 750 (after shrinking big ones), plus room for error. */
+async function imageTokens(block: { source?: { type?: string; data?: string } }): Promise<number> {
+  const UNKNOWN = 10_000;
+  if (block.source?.type !== "base64" || typeof block.source.data !== "string") return UNKNOWN;
+  try {
+    const meta = await sharp(Buffer.from(block.source.data, "base64")).metadata();
+    if (!meta.width || !meta.height) return UNKNOWN;
+    return Math.ceil(((meta.width * meta.height) / 750) * 1.1) + 100;
+  } catch {
+    return UNKNOWN;
+  }
+}
+
+/**
+ * An upper bound on a request's input tokens, without asking Anthropic: every byte of
+ * text counts as a token (a token is never shorter than a byte), images by their size,
+ * plus a margin for the request's own framing. Prepaid credits use it to make sure a
+ * call can't cost more than the credit set aside for it.
+ */
+export async function inputTokenBound(request: { system: unknown; messages: Anthropic.Beta.BetaMessageParam[]; extra?: unknown }): Promise<number> {
+  let images = 0;
+  for (const m of request.messages) {
+    if (typeof m.content === "string") continue;
+    for (const b of m.content) {
+      if (b.type === "image") images += await imageTokens(b as { source?: { type?: string; data?: string } });
+      if (b.type === "tool_result" && Array.isArray(b.content))
+        for (const inner of b.content) if (inner.type === "image") images += await imageTokens(inner as { source?: { type?: string; data?: string } });
+    }
+  }
+  const text = JSON.stringify({ s: request.system, m: request.messages, x: request.extra ?? null }, (k, v) => (k === "data" && typeof v === "string" ? "" : v));
+  return Buffer.byteLength(text, "utf8") + images + 2_000;
+}
+
+/**
+ * Prepaid credits: claims the call's worst case from the reservation it runs on
+ * (credits.ts holdForCall), which may lower its max_tokens to what still fits. Null for
+ * calls that aren't paid with credits.
+ */
+async function holdCredits(
+  caller: Caller,
+  reviewId: string | null,
+  model: ModelId,
+  request: Parameters<typeof inputTokenBound>[0],
+  maxTokens: number,
+  minTokens: number,
+): Promise<Hold | null> {
+  if (caller.paidWith !== "credits") return null;
+  const reservation = currentReservation();
+  if (!reservation || !reviewId) throw new AiUnavailable("No credit was set aside for this, so it can't run. Please try again.");
+  const [i, o] = PRICES[model];
+  // Every input token priced as a cache write, the most an input token can cost (see priceOf).
+  const inputMicros = (await inputTokenBound(request)) * i * 1.25;
+  try {
+    return await holdForCall(reservation, reviewId, { inputMicros, outputMicrosPerToken: o, maxTokens, minTokens });
+  } catch (e) {
+    if (e instanceof ReservationUsed || e instanceof NotEnoughCredits) throw new BudgetExceeded(e.message);
+    throw e;
+  }
+}
+
 type CallOpts<S extends z.ZodType> = {
   label: string;
   /**
@@ -127,21 +189,30 @@ export async function callStructured<S extends z.ZodType>(opts: CallOpts<S>): Pr
   await checkBudget(opts.reviewId, caller);
   const { client, ownKeyOf, paidWith } = caller;
   const useFallbacks = opts.model !== MODELS.fast;
-  const stream = client.beta.messages.stream({
-    model: opts.model,
-    max_tokens: opts.maxTokens ?? 32000,
-    system: opts.system,
-    messages: opts.messages,
-    output_config: { format: betaZodOutputFormat(opts.schema), ...(opts.effort ? { effort: opts.effort } : {}) },
-    ...(useFallbacks ? { betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" as const } : {}),
-  });
-  const msg = await stream.finalMessage().catch(async (e) => {
-    throw await accountProblem(e, ownKeyOf);
-  });
-  const usd = priceOf(opts.model, msg.usage);
-  await recordSpend({ label: opts.label, model: opts.model, usd, reviewId: opts.reviewId, paidWith });
-  if (opts.reviewId) {
-    await addCost(opts.reviewId, { label: opts.label, model: opts.model, usd, inTok: msg.usage.input_tokens, outTok: msg.usage.output_tokens });
+  const format = betaZodOutputFormat(opts.schema);
+  const wanted = opts.maxTokens ?? 32000;
+  const hold = await holdCredits(caller, opts.reviewId, opts.model, { system: opts.system, messages: opts.messages, extra: format }, wanted, Math.min(wanted, 16000));
+  let usd = 0;
+  let msg: Anthropic.Beta.BetaMessage & { parsed_output?: unknown };
+  try {
+    const stream = client.beta.messages.stream({
+      model: opts.model,
+      max_tokens: hold?.maxTokens ?? wanted,
+      system: opts.system,
+      messages: opts.messages,
+      output_config: { format, ...(opts.effort ? { effort: opts.effort } : {}) },
+      ...(useFallbacks ? { betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" as const } : {}),
+    });
+    msg = await stream.finalMessage().catch(async (e) => {
+      throw await accountProblem(e, ownKeyOf);
+    });
+    usd = priceOf(opts.model, msg.usage);
+    await recordSpend({ label: opts.label, model: opts.model, usd, reviewId: opts.reviewId, paidWith });
+    if (opts.reviewId) {
+      await addCost(opts.reviewId, { label: opts.label, model: opts.model, usd, inTok: msg.usage.input_tokens, outTok: msg.usage.output_tokens });
+    }
+  } finally {
+    if (hold) await releaseHold(hold, usdToMicros(usd));
   }
   if (msg.stop_reason === "refusal") throw new Error(`${opts.label}: the model declined this request.`);
   if (msg.stop_reason === "max_tokens") throw new Error(`${opts.label}: response was cut off (max_tokens).`);
@@ -154,33 +225,58 @@ export async function* streamText(opts: Omit<CallOpts<z.ZodType>, "schema"> & { 
   const caller = await anthropicFor(opts.reviewId);
   await checkBudget(opts.reviewId, caller);
   const { client, ownKeyOf, paidWith } = caller;
-  const stream = client.beta.messages.stream({
-    model: opts.model,
-    max_tokens: opts.maxTokens ?? 8000,
-    system: opts.system,
-    messages: opts.messages,
-    ...(opts.tools ? { tools: opts.tools } : {}),
-    ...(opts.effort ? { output_config: { effort: opts.effort } } : {}),
-    betas: ["server-side-fallback-2026-07-01"],
-    fallbacks: "default",
-  });
-  try {
-    for await (const ev of stream) {
-      if (ev.type === "content_block_delta" && ev.delta.type === "text_delta") yield { type: "text" as const, text: ev.delta.text };
+  const wanted = opts.maxTokens ?? 8000;
+  const hold = await holdCredits(caller, opts.reviewId, opts.model, { system: opts.system, messages: opts.messages, extra: opts.tools }, wanted, Math.min(wanted, 4000));
+  let msg: Anthropic.Beta.BetaMessage | null = null;
+  let failed = false;
+  const record = async (m: Anthropic.Beta.BetaMessage) => {
+    const usd = priceOf(opts.model, m.usage);
+    await recordSpend({ label: opts.label, model: opts.model, usd, reviewId: opts.reviewId, paidWith });
+    if (opts.reviewId) await addCost(opts.reviewId, { label: opts.label, model: opts.model, usd, inTok: m.usage.input_tokens, outTok: m.usage.output_tokens });
+  };
+  const stream = (() => {
+    try {
+      return client.beta.messages.stream({
+        model: opts.model,
+        max_tokens: hold?.maxTokens ?? wanted,
+        system: opts.system,
+        messages: opts.messages,
+        ...(opts.tools ? { tools: opts.tools } : {}),
+        ...(opts.effort ? { output_config: { effort: opts.effort } } : {}),
+        betas: ["server-side-fallback-2026-07-01"],
+        fallbacks: "default",
+      });
+    } catch (e) {
+      if (hold) void releaseHold(hold, 0);
+      throw e;
     }
-  } catch (e) {
-    throw await accountProblem(e, ownKeyOf);
+  })();
+  try {
+    try {
+      for await (const ev of stream) {
+        if (ev.type === "content_block_delta" && ev.delta.type === "text_delta") yield { type: "text" as const, text: ev.delta.text };
+      }
+    } catch (e) {
+      failed = true;
+      throw await accountProblem(e, ownKeyOf);
+    }
+    msg = await stream.finalMessage();
+    await record(msg);
+    yield { type: "final" as const, message: msg };
+  } finally {
+    let actual = msg ? usdToMicros(priceOf(opts.model, msg.usage)) : 0;
+    // Whoever was reading stopped early. If the answer still finished, its real cost is
+    // recorded; if it was cut off, what it used isn't known, so on credits its worst case is.
+    if (!msg && !failed) {
+      msg = await stream.finalMessage().catch(() => null);
+      if (msg) {
+        actual = usdToMicros(priceOf(opts.model, msg.usage));
+        await record(msg).catch((e) => console.error("[ai] recording an abandoned call's cost failed", e));
+      } else if (hold) {
+        actual = hold.ceiling;
+        await recordSpend({ label: `${opts.label} (stopped early, worst case)`, model: opts.model, usd: actual / 1e6, reviewId: opts.reviewId, paidWith }).catch(() => {});
+      }
+    }
+    if (hold) await releaseHold(hold, actual);
   }
-  const msg = await stream.finalMessage();
-  await recordSpend({ label: opts.label, model: opts.model, usd: priceOf(opts.model, msg.usage), reviewId: opts.reviewId, paidWith });
-  if (opts.reviewId) {
-    await addCost(opts.reviewId, {
-      label: opts.label,
-      model: opts.model,
-      usd: priceOf(opts.model, msg.usage),
-      inTok: msg.usage.input_tokens,
-      outTok: msg.usage.output_tokens,
-    });
-  }
-  yield { type: "final" as const, message: msg };
 }

@@ -9,6 +9,8 @@ import { composeDiscussion, evidenceBlocks, reviewerPass, synthesize } from "@/a
 import { getProfile } from "@/experts/load";
 import { getReview, reviewDir, updateReview } from "./reviews";
 import { enqueue } from "./jobs";
+import { isHosted } from "./config";
+import { onReservation, reservationForRun, settleReservation } from "./credits";
 
 function originalFile(dir: string): string {
   const f = fs.readdirSync(dir).find((x) => x.startsWith("original."));
@@ -34,6 +36,23 @@ function coverage(p: { durationSec: number; width: number; height: number; hasAu
     transcript: ledger.transcript.length ? "speech" : "no_speech_detected",
     notes,
   };
+}
+
+/**
+ * The worker's way in. On prepaid credits (hosted mode) every paid call runs on the
+ * credit set aside for this run; finished or failed, the run is then charged what its
+ * calls cost plus the margin, and the rest is released. Otherwise it's processReview.
+ */
+export async function runReview(id: string, work: (id: string) => Promise<void> = processReview) {
+  const r = await getReview(id);
+  if (!(isHosted() && r?.paidWith === "credits")) return work(id);
+  if (!r.userId) throw new Error("Log in to run this review.");
+  const reservation = await reservationForRun(r.userId, id);
+  try {
+    await onReservation(reservation, () => work(id));
+  } finally {
+    await settleReservation(reservation).catch((e) => console.error(`[credits] settling review ${id} failed:`, e));
+  }
 }
 
 export async function processReview(id: string) {

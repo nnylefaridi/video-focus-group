@@ -3,11 +3,12 @@
  * Runs alongside the web app (`npm run dev` starts both).
  */
 import { claimNext, finishJob, requeueStale, retryJob } from "../src/server/jobs";
-import { processReview } from "../src/server/process";
+import { runReview } from "../src/server/process";
 import { storeReviewMedia } from "../src/server/storage";
 import { cleanupAbandonedUploads, getReview, updateReview } from "../src/server/reviews";
 import { AiUnavailable, BudgetExceeded, checkReviewKey } from "../src/ai/client";
 import { isHosted } from "../src/server/config";
+import { NotEnoughCredits, settleStaleFollowups } from "../src/server/credits";
 import { exitUnlessReady, startupEnv } from "../src/server/mode.mjs";
 
 exitUnlessReady(startupEnv());
@@ -21,7 +22,7 @@ process.on("SIGINT", () => (stopping = true));
 process.on("SIGTERM", () => (stopping = true));
 
 function friendly(e: unknown): string {
-  if (e instanceof AiUnavailable || e instanceof BudgetExceeded) return e.message;
+  if (e instanceof AiUnavailable || e instanceof BudgetExceeded || e instanceof NotEnoughCredits) return e.message;
   const msg = e instanceof Error ? e.message : String(e);
   if (/overloaded|529|rate.?limit|429/i.test(msg)) return "The AI service is busy right now. Try again in a minute.";
   return msg.length > 300 ? `${msg.slice(0, 300)}…` : msg;
@@ -31,6 +32,8 @@ while (!stopping) {
   if (Date.now() - lastCleanup > 10 * 60 * 1000) {
     const n = await cleanupAbandonedUploads().catch((e) => (console.error("[worker] cleanup failed:", e), 0));
     if (n) console.log(`[worker] removed ${n} abandoned upload(s)`);
+    const f = await settleStaleFollowups().catch((e) => (console.error("[worker] settling old follow-up credit failed:", e), 0));
+    if (f) console.log(`[worker] settled ${f} follow-up answer(s) that never finished`);
     lastCleanup = Date.now();
   }
   let job;
@@ -55,7 +58,7 @@ while (!stopping) {
       if (isHosted() && !(await getReview(job.reviewId))?.userId) throw new Error("Log in to run this review.");
       // A review on its owner's own key needs that key saved and usable now; each paid call looks it up again.
       await checkReviewKey(job.reviewId);
-      await processReview(job.reviewId);
+      await runReview(job.reviewId);
     }
     else if (job.kind === "store") await storeReviewMedia(job.reviewId);
     await finishJob(job.id);

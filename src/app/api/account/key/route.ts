@@ -11,7 +11,7 @@ import { KeyVaultUnavailable } from "@/server/keyvault";
  * Hosted mode only: the account's own Anthropic API key. Nothing here ever sends the
  * key back; responses carry only its last 4 characters and when it was saved.
  */
-const localOnly = () => Response.json({ error: "Saving your own API key is only for the hosted site. This copy of Panel uses the key in .env.local." }, { status: 404 });
+const localOnly = () => Response.json({ error: "Saving your own API key is only for the hosted site. This copy of Video Focus Group uses the key in .env.local." }, { status: 404 });
 
 export async function GET() {
   await connection();

@@ -83,6 +83,8 @@ const HOSTED_REQUIRED = [
   "DATABASE_URL",
   "HOSTED_PUBLIC_URL",
   "KEY_ENCRYPTION_SECRET",
+  "STRIPE_SECRET_KEY",
+  "STRIPE_WEBHOOK_SECRET",
 ];
 
 const set = (v) => Boolean(v && String(v).trim());
@@ -99,6 +101,11 @@ export function hostedProblems(env) {
     invalid.push(`HOSTED_PUBLIC_URL must be the site's public https address with nothing after it, like https://panel.example.com (it's "${String(env.HOSTED_PUBLIC_URL).trim()}")`);
   if (set(env.KEY_ENCRYPTION_SECRET) && !encryptionSecretOf(env.KEY_ENCRYPTION_SECRET))
     invalid.push("KEY_ENCRYPTION_SECRET must be 32 random bytes, written as base64 or hex. Make one with: openssl rand -base64 32");
+  // A publishable key (pk_) can't create payments; the secret or restricted key can.
+  if (set(env.STRIPE_SECRET_KEY) && !/^(sk|rk)_(live|test)_\S+$/.test(String(env.STRIPE_SECRET_KEY).trim()))
+    invalid.push("STRIPE_SECRET_KEY must be the secret key from the Stripe Dashboard (Developers → API keys), starting sk_live_ or sk_test_ (or a restricted key, rk_)");
+  if (set(env.STRIPE_WEBHOOK_SECRET) && !/^whsec_\S+$/.test(String(env.STRIPE_WEBHOOK_SECRET).trim()))
+    invalid.push("STRIPE_WEBHOOK_SECRET must be the webhook endpoint's signing secret, starting whsec_ (Stripe Dashboard → Developers → Webhooks → your endpoint)");
   if (proxies && !/^\d+$/.test(proxies)) invalid.push(`TRUSTED_PROXIES must be a whole number, the count of proxies in front of Panel (it's "${proxies}")`);
   const port = String(env.PORT ?? "").trim();
   if (port && !(/^\d+$/.test(port) && Number(port) >= 1 && Number(port) <= 65535)) invalid.push(`PORT must be a port number like 3000 (it's "${port}")`);

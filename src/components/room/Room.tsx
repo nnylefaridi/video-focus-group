@@ -215,7 +215,7 @@ export function Room({ id }: { id: string }) {
               }}
               onRetry={async () => {
                 const res = await fetch(`/api/reviews/${id}/retry`, { method: "POST" }).catch(() => null);
-                if (!res) return "Couldn't reach Panel. Check it's still running, then try again.";
+                if (!res) return "Couldn't reach Video Focus Group. Check your connection, then try again.";
                 if (!res.ok) return ((await res.json().catch(() => ({}))) as { error?: string }).error ?? "Couldn't start the review again.";
                 setReloads((n) => n + 1);
                 return null;

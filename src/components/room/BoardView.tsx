@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { STAGE_LABELS, type ReviewStage } from "@/core/review";
 import { API_KEY_HREF, isKeyProblem } from "@/core/ownkey";
+import { CREDITS_HREF, isCreditsProblem } from "@/core/credits";
 import { Boardroom } from "../board/Boardroom";
 import type { PuppetState } from "../puppets/Puppet";
 import { Avatar } from "../Avatar";
@@ -17,6 +18,15 @@ function FixKeyLink() {
   return (
     <Link href={API_KEY_HREF} className="mt-2 text-sm font-bold text-ink underline decoration-line-strong underline-offset-4 hover:text-accent">
       Fix your API key
+    </Link>
+  );
+}
+
+/** Hosted mode: a review or answer stopped for lack of credit. This is where more is added. */
+export function AddCreditsLink() {
+  return (
+    <Link href={CREDITS_HREF} className="mt-2 text-sm font-bold text-ink underline decoration-line-strong underline-offset-4 hover:text-accent">
+      Add credits
     </Link>
   );
 }
@@ -145,6 +155,7 @@ export function BoardView({
               <p className="font-bold text-warn">The review stopped partway.</p>
               <p className="mt-1 text-sm text-warn">{view.error}</p>
               {(isKeyProblem(view.error) || isKeyProblem(retryError)) && <FixKeyLink />}
+              {(isCreditsProblem(view.error) || isCreditsProblem(retryError)) && <AddCreditsLink />}
               <button onClick={async () => setRetryError(await onRetry())} className="mt-3 rounded-full bg-accent px-5 py-2 text-sm font-bold text-accent-ink">
                 Try again
               </button>

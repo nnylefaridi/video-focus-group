@@ -6,6 +6,8 @@ import { ArrowUp, Eye, Spinner } from "../Icons";
 import { useRoom } from "./context";
 import { CitedText, PrincipleChips, principleIdsIn } from "./Evidence";
 import { formatTime } from "@/core/evidence";
+import { isCreditsProblem } from "@/core/credits";
+import { AddCreditsLink } from "./BoardView";
 
 type Msg = { role: "user" | "assistant"; text: string };
 
@@ -139,6 +141,12 @@ export function Ask({ initialWho }: { initialWho?: string | null }) {
       {error && (
         <p role="alert" className="mt-4 rounded-xl bg-warn-soft px-4 py-2.5 text-sm text-warn">
           {error}
+          {isCreditsProblem(error) && (
+            <>
+              {" "}
+              <AddCreditsLink />
+            </>
+          )}
         </p>
       )}
 

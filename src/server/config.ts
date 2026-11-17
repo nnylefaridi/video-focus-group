@@ -44,6 +44,8 @@ const num = (v: string | undefined, fallback: number) => {
 
 /** Spending protection for your API key. Override any of these in .env.local. */
 export const COST_CAP_USD = num(process.env.REVIEW_COST_CAP_USD, 3);
+/** Hosted mode, prepaid credits: the most one follow-up answer may cost (it sets this aside, with the margin, while it's written). */
+export const FOLLOWUP_COST_CAP_USD = num(process.env.FOLLOWUP_COST_CAP_USD, 1.5);
 export const SPEND_LIMITS = {
   dailyUsd: num(process.env.DAILY_LIMIT_USD, 10),
   monthlyUsd: num(process.env.MONTHLY_LIMIT_USD, 40),

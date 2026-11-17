@@ -8,6 +8,7 @@ import { getPaymentContext, paymentResponse } from "@/server/billing";
 import { startReview, LimitReached, limitResponse } from "@/server/budget";
 import { authReady, ensureAnonId, getViewer, mustSignIn, signInResponse } from "@/server/auth";
 import { whoIsCalling } from "@/server/client";
+import { creditsResponse, NotEnoughCredits } from "@/server/credits";
 
 const Body = z.object({
   answers: z.array(z.object({ questionId: z.string(), display: z.string(), fields: z.record(z.string(), z.unknown()), skipped: z.boolean().optional() })),
@@ -61,6 +62,7 @@ export async function POST(req: Request) {
     });
   } catch (e) {
     if (e instanceof LimitReached) return limitResponse(e);
+    if (e instanceof NotEnoughCredits) return creditsResponse(e);
     throw e;
   }
   return Response.json({ id });

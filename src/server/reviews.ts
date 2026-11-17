@@ -8,6 +8,7 @@ import type { IntentFields } from "@/core/intent";
 import type { Ledger } from "@/core/evidence";
 import type { ReviewerNotes, ReviewStage, StoredTurn, Synthesis } from "@/core/review";
 import { isPaymentMethod, type PaymentMethod } from "./billing";
+import { settleOpenReservations } from "./credits";
 
 export type VideoMeta = {
   originalName: string;
@@ -206,6 +207,8 @@ export async function cleanupAbandonedUploads(olderThanMs = 30 * 60 * 1000): Pro
  */
 export async function deleteReview(id: string, opts: { refund?: boolean } = {}) {
   const r = await getReview(id);
+  // Credit set aside for it comes back, less anything its calls already cost.
+  await settleOpenReservations(id);
   await tx(async (t) => {
     if (opts.refund) await t("DELETE FROM app.usage WHERE review_id = $1 AND kind = 'review'", [id]);
     await t("DELETE FROM app.reviews WHERE id = $1", [id]);

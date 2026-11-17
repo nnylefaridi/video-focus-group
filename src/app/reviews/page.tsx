@@ -13,6 +13,8 @@ import { SignOut } from "@/components/account/SignOut";
 import { ApiKeyPanel } from "@/components/account/ApiKeyPanel";
 import { getPaymentContext } from "@/server/billing";
 import { API_KEY_ANCHOR } from "@/core/ownkey";
+import { CreditsPanel } from "@/components/account/CreditsPanel";
+import { CREDITS_ANCHOR } from "@/core/credits";
 
 const isOwner = (email: string | null) =>
   Boolean(email && (process.env.OWNER_EMAILS ?? "").split(",").map((e) => e.trim().toLowerCase()).includes(email.toLowerCase()));
@@ -70,10 +72,25 @@ async function OwnKey({ userId }: { userId: string }) {
       </h2>
       <p className="text-sm text-ink-soft">
         {payment.method === "own_key"
-          ? "Your reviews and follow-up questions run on this key, billed by Anthropic. Panel charges nothing for them."
+          ? "Your reviews and follow-up questions run on this key, billed by Anthropic. Video Focus Group charges nothing for them."
           : "Saved for when you pay with your own key. Your reviews use prepaid credits right now."}
       </p>
       <ApiKeyPanel initial={payment.key} />
+    </section>
+  );
+}
+
+/** Hosted mode: the account's prepaid credits, when it pays with them or has any. */
+async function Credits({ userId }: { userId: string }) {
+  const payment = await getPaymentContext(userId);
+  if (payment.method !== "credits" && payment.credits.balance === 0) return null;
+  return (
+    <section id={CREDITS_ANCHOR} aria-labelledby="credits-heading" className="cutout mt-6 scroll-mt-6 space-y-3 p-5">
+      <h2 id="credits-heading" className="font-display text-lg font-extrabold text-ink">
+        Your credits
+      </h2>
+      {payment.method !== "credits" && <p className="text-sm text-ink-soft">Your reviews use your own Anthropic API key right now, so these aren&apos;t being spent.</p>}
+      <CreditsPanel initial={payment} from="reviews" />
     </section>
   );
 }
@@ -163,6 +180,7 @@ async function Account() {
         {viewer.email ? <>Signed in as {viewer.email} · </> : null}
         <SignOut />
       </p>
+      {isHosted() && <Credits userId={viewer.userId} />}
       {isHosted() && <OwnKey userId={viewer.userId} />}
       <Usage email={viewer.email} userId={viewer.userId} />
       <List userId={viewer.userId} />

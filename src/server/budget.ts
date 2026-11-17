@@ -1,5 +1,6 @@
 import { q, tx, type Query } from "./db";
-import { SPEND_LIMITS } from "./config";
+import { isHosted, SPEND_LIMITS } from "./config";
+import { reserveCredits } from "./credits";
 import { INSERT_REVIEW, insertReviewParams } from "./reviews";
 import type { Who } from "./client";
 import type { PaymentMethod } from "./billing";
@@ -139,6 +140,11 @@ export async function startReview(who: Who, review: Parameters<typeof insertRevi
       throw new LimitReached("So many reviews were started from your network today that it has reached its daily limit. It resets at midnight.");
     await t(INSERT_REVIEW, insertReviewParams(review));
     await reserve(t, who, "review", review.id);
+    // Prepaid credits: its worst case is set aside now, or nothing is created (NotEnoughCredits).
+    if (review.paidWith === "credits") {
+      if (!review.userId) throw new Error("A review on credits needs an account.");
+      await reserveCredits(t, review.userId, review.id, "review");
+    }
   });
 }
 
@@ -174,16 +180,26 @@ export async function spendKeyCheck(who: Who) {
   });
 }
 
-/** Follow-up questions per review are capped so one review can't keep spending forever. */
-export async function spendFollowup(who: Who, reviewId: string) {
-  await tx(async (t, lock) => {
+/**
+ * Follow-up questions per review are capped so one review can't keep spending forever.
+ * On prepaid credits (hosted mode) each answer also sets credit aside, under the same
+ * lock: the id of that reservation is returned (null when it isn't paid with credits).
+ */
+export async function spendFollowup(who: Who, reviewId: string): Promise<number | null> {
+  return tx(async (t, lock) => {
     await lock(`followup:${reviewId}`);
-    const [review] = await t<{ paid_with: string | null }>("SELECT paid_with::text AS paid_with FROM app.reviews WHERE id = $1", [reviewId]);
+    const [review] = await t<{ paid_with: string | null; user_id: string | null }>("SELECT paid_with::text AS paid_with, user_id FROM app.reviews WHERE id = $1", [
+      reviewId,
+    ]);
     if (review?.paid_with !== "own_key") await assertWithinSpendLimits(t);
     const [row] = await t<{ n: number }>("SELECT COUNT(*)::int AS n FROM app.usage WHERE review_id = $1 AND kind = 'followup'", [reviewId]);
     if (Number(row.n) >= SPEND_LIMITS.maxFollowupsPerReview)
       throw new LimitReached(`This review has reached its limit of ${SPEND_LIMITS.maxFollowupsPerReview} follow-up questions.`);
+    const credits = isHosted() && review?.paid_with === "credits";
+    if (credits && !review.user_id) throw new Error("A review on credits needs an account.");
+    const reservation = credits ? await reserveCredits(t, review.user_id!, reviewId, "followup") : null;
     await reserve(t, who, "followup", reviewId);
+    return reservation;
   });
 }
 

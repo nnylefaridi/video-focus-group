@@ -9,7 +9,7 @@ import { LoginHint } from "./LoginHint";
 
 const CHOICES: { method: PaymentMethod; label: string; cost: string }[] = [
   { method: "credits", label: "Prepaid credits", cost: "You pay what the review costs us plus 20%." },
-  { method: "own_key", label: "My own Anthropic API key", cost: "Billed by Anthropic to your key. Panel charges nothing." },
+  { method: "own_key", label: "My own Anthropic API key", cost: "Billed by Anthropic to your key. Video Focus Group charges nothing." },
 ];
 
 export const PAYMENT_LABELS: Record<PaymentMethod, string> = { credits: "prepaid credits", own_key: "your own Anthropic API key" };
@@ -38,7 +38,7 @@ export function PaymentStep({
     const res = await fetch("/api/account/payment", { method: "POST", body: JSON.stringify({ method }) }).catch(() => null);
     const data = res ? await res.json().catch(() => ({})) : {};
     setBusy(null);
-    if (!res) return setError("Couldn't reach Panel. Please try again.");
+    if (!res) return setError("Couldn't reach Video Focus Group. Please try again.");
     if (!res.ok) {
       setLoginHelps(Boolean(data.login));
       return setError(data.error ?? "Couldn't save that. Please try again.");
@@ -52,7 +52,7 @@ export function PaymentStep({
         <ArrowLeft className="h-4 w-4" /> Back
       </button>
       <h1 className="font-display text-[2rem] leading-tight font-extrabold text-ink sm:text-[2.6rem]">How do you want to pay?</h1>
-      <p className="mt-3 font-semibold text-ink-soft">Panel remembers your pick for next time. You can change it whenever you like.</p>
+      <p className="mt-3 font-semibold text-ink-soft">Video Focus Group remembers your pick for next time. You can change it whenever you like.</p>
 
       <div className="mt-8 flex flex-col gap-3" role="radiogroup" aria-label="How do you want to pay?">
         {CHOICES.map((c) => {

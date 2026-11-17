@@ -31,7 +31,7 @@ export function ApiKeyPanel({ initial, onChange }: { initial: KeyInfo | null; on
     const res = await fetch("/api/account/key", { method, body: method === "PUT" ? JSON.stringify({ key: value }) : undefined }).catch(() => null);
     const data = res ? await res.json().catch(() => ({})) : {};
     setBusy(null);
-    if (!res) return setError("Couldn't reach Panel. Please try again.");
+    if (!res) return setError("Couldn't reach Video Focus Group. Please try again.");
     if (!res.ok) {
       setLoginHelps(Boolean(data.login));
       return setError(data.error ?? "Couldn't save that. Please try again.");
@@ -77,7 +77,7 @@ export function ApiKeyPanel({ initial, onChange }: { initial: KeyInfo | null; on
 
       {confirmRemove && (
         <div className="mt-3 rounded-xl bg-warn-soft px-4 py-3 text-sm text-warn">
-          <p>Remove your key from Panel? A review running on it will stop at its next step.</p>
+          <p>Remove your key from Video Focus Group? A review running on it will stop at its next step.</p>
           <div className="mt-2 flex gap-2 font-semibold">
             <button onClick={() => send("DELETE")} disabled={busy !== null} className="inline-flex items-center gap-1.5 rounded-full bg-warn px-3 py-1.5 text-card disabled:opacity-60">
               {busy === "remove" && <Spinner className="h-4 w-4" />}
@@ -117,7 +117,7 @@ export function ApiKeyPanel({ initial, onChange }: { initial: KeyInfo | null; on
             <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noreferrer" className="underline underline-offset-2 hover:text-ink">
               Anthropic Console
             </a>
-            . Panel checks it with Anthropic, keeps it encrypted, and only ever shows its last 4 characters.
+            . Video Focus Group checks it with Anthropic, keeps it encrypted, and only ever shows its last 4 characters.
           </p>
           <div className="mt-3 flex gap-2">
             <button
